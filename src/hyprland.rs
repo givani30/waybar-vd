@@ -8,10 +8,16 @@ use tokio::net::UnixStream;
 pub struct HyprlandIPC {
     socket_path: PathBuf,
     event_socket_path: PathBuf,
+    retry_max: u32,
+    retry_base_delay_ms: u64,
 }
 
 impl HyprlandIPC {
     pub async fn new() -> Result<Self> {
+        Self::with_config(10, 500).await
+    }
+
+    pub async fn with_config(retry_max: u32, retry_base_delay_ms: u64) -> Result<Self> {
         let instance_signature = env::var("HYPRLAND_INSTANCE_SIGNATURE")
             .map_err(|_| anyhow!("HYPRLAND_INSTANCE_SIGNATURE not set"))?;
 
@@ -45,38 +51,44 @@ impl HyprlandIPC {
         Ok(Self {
             socket_path,
             event_socket_path,
+            retry_max,
+            retry_base_delay_ms,
         })
     }
     
     pub async fn listen_for_events(&mut self) -> Result<String> {
         let mut retry_count = 0;
-        const MAX_RETRIES: u32 = 10;
-        const BASE_DELAY_MS: u64 = 500;
+        let max_retries = self.retry_max;
+        let base_delay_ms = self.retry_base_delay_ms;
         const MAX_DELAY_MS: u64 = 30000; // 30 seconds max
 
         loop {
             match self.try_listen_for_events().await {
                 Ok(event) => {
-                    // Reset retry count on successful connection
-                    retry_count = 0;
+                    // Successfully received event, return immediately
                     return Ok(event);
                 }
                 Err(e) => {
                     retry_count += 1;
 
-                    if retry_count > MAX_RETRIES {
-                        log::error!("Max retries ({}) exceeded for event listening. Giving up.", MAX_RETRIES);
-                        return Err(anyhow::anyhow!("Event listening failed after {} retries: {}", MAX_RETRIES, e));
+                    if retry_count > max_retries {
+                        log::error!("Max retries ({}) exceeded for event listening. Giving up.", max_retries);
+                        return Err(anyhow::anyhow!("Event listening failed after {} retries: {}", max_retries, e));
                     }
 
-                    // Exponential backoff with jitter
-                    let delay_ms = std::cmp::min(
-                        BASE_DELAY_MS * 2_u64.pow(retry_count - 1),
+                    // Exponential backoff with jitter to prevent thundering herd
+                    let base_delay = std::cmp::min(
+                        base_delay_ms * 2_u64.pow(retry_count - 1),
                         MAX_DELAY_MS
                     );
 
-                    log::warn!("Event listening failed (attempt {}/{}), retrying in {}ms: {}",
-                              retry_count, MAX_RETRIES, delay_ms, e);
+                    // Add ±25% jitter to prevent synchronized retries
+                    let jitter_range = base_delay / 4; // 25% of base delay
+                    let jitter = fastrand::u64(0..=jitter_range * 2); // 0 to 50% of base
+                    let delay_ms = base_delay.saturating_sub(jitter_range).saturating_add(jitter);
+
+                    log::warn!("Event listening failed (attempt {}/{}), retrying in {}ms (base: {}ms): {}",
+                              retry_count, max_retries, delay_ms, base_delay, e);
 
                     tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                 }

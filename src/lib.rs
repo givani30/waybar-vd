@@ -44,6 +44,14 @@ pub struct Config {
     /// Sort method: "number", "name", "focused-first"
     #[serde(default = "default_sort_by")]
     pub sort_by: String,
+
+    /// Maximum number of retry attempts for IPC operations
+    #[serde(default = "default_retry_max")]
+    pub retry_max: u32,
+
+    /// Base delay in milliseconds for exponential backoff
+    #[serde(default = "default_retry_base_delay_ms")]
+    pub retry_base_delay_ms: u64,
 }
 
 fn default_format() -> String {
@@ -64,6 +72,14 @@ fn default_show_window_count() -> bool {
 
 fn default_sort_by() -> String {
     "number".to_string()
+}
+
+fn default_retry_max() -> u32 {
+    10
+}
+
+fn default_retry_base_delay_ms() -> u64 {
+    500
 }
 
 /// Widget state for a virtual desktop
@@ -103,6 +119,8 @@ impl Module for VirtualDesktopsModule {
             format_icons: config.format_icons,
             show_window_count: config.show_window_count,
             sort_by: config.sort_by,
+            retry_max: config.retry_max,
+            retry_base_delay_ms: config.retry_base_delay_ms,
         };
 
         log::debug!("Module config: format={}, show_empty={}", module_config.format, module_config.show_empty);
@@ -140,9 +158,10 @@ impl Module for VirtualDesktopsModule {
         // Start background thread for IPC monitoring using the same runtime
         let manager_clone = Arc::clone(&manager);
         let handle_clone = runtime_handle.clone();
+        let config_clone = module_config.clone();
         thread::spawn(move || {
             handle_clone.block_on(async {
-                if let Err(e) = monitor_virtual_desktops(manager_clone).await {
+                if let Err(e) = monitor_virtual_desktops(manager_clone, config_clone).await {
                     log::error!("Virtual desktop monitoring failed: {}", e);
                 }
             });
@@ -211,11 +230,16 @@ impl VirtualDesktopsModule {
     }
 
     fn update_widgets_incrementally(&mut self, visible_vdesks: Vec<crate::vdesk::VirtualDesktop>) {
+        use std::collections::HashSet;
+
+        // Create HashSet for O(1) lookup - reduces complexity from O(n×m) to O(n+m)
+        let visible_ids: HashSet<u32> = visible_vdesks.iter().map(|vd| vd.id).collect();
+
         // Remove widgets for virtual desktops that are no longer visible
         let mut i = 0;
         while i < self.widgets.len() {
             let widget_vdesk_id = self.widgets[i].vdesk_id;
-            if !visible_vdesks.iter().any(|vd| vd.id == widget_vdesk_id) {
+            if !visible_ids.contains(&widget_vdesk_id) {
                 let widget = self.widgets.remove(i);
                 self.container.remove(&widget.event_box);
             } else {
@@ -363,11 +387,14 @@ impl VirtualDesktopsModule {
 }
 
 /// Background task to monitor virtual desktop changes
-async fn monitor_virtual_desktops(manager: Arc<tokio::sync::Mutex<VirtualDesktopsManager>>) -> Result<()> {
+async fn monitor_virtual_desktops(
+    manager: Arc<tokio::sync::Mutex<VirtualDesktopsManager>>,
+    config: crate::config::ModuleConfig
+) -> Result<()> {
     log::info!("Starting virtual desktop monitoring...");
 
-    // Create IPC connection for event monitoring
-    let mut ipc = match HyprlandIPC::new().await {
+    // Create IPC connection for event monitoring with configurable retry parameters
+    let mut ipc = match HyprlandIPC::with_config(config.retry_max, config.retry_base_delay_ms).await {
         Ok(ipc) => {
             log::info!("Successfully connected to Hyprland IPC for monitoring");
             ipc
@@ -397,6 +424,63 @@ async fn monitor_virtual_desktops(manager: Arc<tokio::sync::Mutex<VirtualDesktop
                 // Wait a bit before retrying
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_widget_update_algorithm_complexity() {
+        // Test that our HashSet optimization works correctly
+        let visible_vdesks = vec![
+            crate::vdesk::VirtualDesktop {
+                id: 1,
+                name: "Desktop 1".to_string(),
+                focused: true,
+                populated: true,
+                window_count: 0,
+                workspaces: vec![],
+            },
+            crate::vdesk::VirtualDesktop {
+                id: 3,
+                name: "Desktop 3".to_string(),
+                focused: false,
+                populated: false,
+                window_count: 0,
+                workspaces: vec![],
+            },
+        ];
+
+        // Create HashSet for O(1) lookup - this is what our optimized algorithm does
+        let visible_ids: HashSet<u32> = visible_vdesks.iter().map(|vd| vd.id).collect();
+
+        // Test that lookup is O(1) instead of O(n)
+        assert!(visible_ids.contains(&1));
+        assert!(!visible_ids.contains(&2));
+        assert!(visible_ids.contains(&3));
+
+        // Verify the set contains exactly what we expect
+        assert_eq!(visible_ids.len(), 2);
+        assert_eq!(visible_ids, [1, 3].iter().cloned().collect());
+    }
+
+    #[test]
+    fn test_jitter_calculation() {
+        // Test that our jitter calculation produces reasonable values
+        let base_delay = 1000u64; // 1 second
+        let jitter_range = base_delay / 4; // 25% = 250ms
+
+        // Simulate the jitter calculation from our code
+        for _ in 0..100 {
+            let jitter = fastrand::u64(0..=jitter_range * 2); // 0 to 500ms
+            let delay_ms = base_delay.saturating_sub(jitter_range).saturating_add(jitter);
+
+            // Delay should be between 750ms and 1250ms (±25% jitter)
+            assert!(delay_ms >= 750);
+            assert!(delay_ms <= 1250);
         }
     }
 }

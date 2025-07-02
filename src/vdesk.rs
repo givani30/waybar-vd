@@ -154,4 +154,18 @@ mod tests {
         assert!(!comms_vdesk.populated);
         assert_eq!(comms_vdesk.window_count, 0);
     }
+
+    #[test]
+    fn test_parse_invalid_json() {
+        let mut manager = VirtualDesktopsManager::new();
+
+        // Test with invalid JSON
+        let invalid_json = "{ invalid json }";
+        let result = manager.parse_virtual_desktop_state(invalid_json);
+        assert!(result.is_err());
+
+        // Verify state is cleared on error (should be empty)
+        let vdesks = manager.get_virtual_desktops();
+        assert_eq!(vdesks.len(), 0);
+    }
 }

@@ -24,6 +24,9 @@ tokio = { version = "1.0", features = ["net", "rt", "rt-multi-thread", "macros",
 anyhow = "1.0"
 thiserror = "1.0"
 
+# Random number generation for jitter
+fastrand = "2.0"
+
 # Logging
 log = "0.4"
 env_logger = "0.10"

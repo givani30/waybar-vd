@@ -2,6 +2,10 @@
 
 A high-performance CFFI module for Waybar that displays Hyprland virtual desktops with real-time updates and click handling.
 
+[![Rust](https://img.shields.io/badge/rust-1.75+-blue.svg)](https://www.rust-lang.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Waybar](https://img.shields.io/badge/waybar-0.12.0+-green.svg)](https://github.com/Alexays/Waybar)
+
 ## Features
 
 - **Real-time Updates**: Monitors Hyprland IPC events for instant virtual desktop state changes
@@ -30,7 +34,7 @@ This module requires the Hyprland virtual desktop plugin. Make sure you have:
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/givanib/waybar-virtual-desktops-cffi.git
 cd waybar-virtual-desktops-cffi
 
 # Build and install
@@ -77,6 +81,8 @@ Add the module to your Waybar configuration:
 | `format_icons` | object | `{}` | Icon mapping for virtual desktop IDs |
 | `show_window_count` | boolean | `false` | Show window count in tooltip |
 | `sort_by` | string | `"number"` | Sort method: "number", "name", "focused-first" |
+| `retry_max` | number | `10` | Maximum number of retry attempts for IPC operations |
+| `retry_base_delay_ms` | number | `500` | Base delay in milliseconds for exponential backoff |
 
 ### Format String Variables
 
@@ -112,6 +118,16 @@ The `format` string supports these variables:
     },
     "show_empty": true,
     "show_window_count": true
+}
+```
+
+#### With Custom Retry Configuration
+```json
+"cffi/virtual-desktops": {
+    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
+    "format": "{name}",
+    "retry_max": 5,
+    "retry_base_delay_ms": 1000
 }
 ```
 
@@ -249,7 +265,7 @@ The CFFI module handles real-time updates automatically, so you can remove any s
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/givanib/waybar-virtual-desktops-cffi.git
 cd waybar-virtual-desktops-cffi
 
 # Build in debug mode
@@ -282,10 +298,47 @@ Use the self-contained test system in the repository:
 
 The test system is **completely safe** - it runs a separate waybar instance that won't interfere with your main setup.
 
+## Architecture
+
+### Core Components
+
+- **VirtualDesktopsModule**: Main CFFI module implementing the Waybar Module trait
+- **HyprlandIPC**: Async IPC client for communicating with Hyprland's Unix sockets
+- **VirtualDesktopsManager**: State manager for tracking virtual desktop information
+- **ModuleConfig**: Configuration handler with format string processing
+
+### Technical Details
+
+- **Language**: Rust (2021 edition)
+- **Runtime**: Tokio async runtime for IPC operations
+- **UI Framework**: GTK3 via waybar-cffi bindings
+- **IPC Protocol**: Direct Unix socket communication with Hyprland
+- **Threading**: Background thread for event monitoring, main thread for UI updates
+
+## Performance
+
+- **Memory**: Low memory footprint with efficient widget reuse
+- **CPU**: Minimal CPU usage through event-driven updates
+- **Network**: Local Unix socket communication (no network overhead)
+- **Responsiveness**: Real-time updates via Hyprland event system
+
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Guidelines
+
+- Follow Rust best practices and clippy suggestions
+- Add tests for new functionality
+- Update documentation for configuration changes
+- Test with the provided test suite before submitting
+
+## Acknowledgments
+
+- [Waybar](https://github.com/Alexays/Waybar) - The fantastic status bar this module extends
+- [Hyprland](https://hyprland.org/) - The dynamic tiling Wayland compositor
+- [waybar-cffi](https://crates.io/crates/waybar-cffi) - The CFFI interface enabling native modules

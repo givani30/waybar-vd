@@ -21,6 +21,12 @@ pub struct ModuleConfig {
     
     /// Sort method: "number", "name", "focused-first"
     pub sort_by: String,
+
+    /// Maximum number of retry attempts for IPC operations
+    pub retry_max: u32,
+
+    /// Base delay in milliseconds for exponential backoff
+    pub retry_base_delay_ms: u64,
 }
 
 impl Default for ModuleConfig {
@@ -32,6 +38,8 @@ impl Default for ModuleConfig {
             format_icons: HashMap::new(),
             show_window_count: false,
             sort_by: "number".to_string(),
+            retry_max: 10,
+            retry_base_delay_ms: 500,
         }
     }
 }
@@ -85,6 +93,8 @@ mod tests {
             format_icons,
             show_window_count: true,
             sort_by: "number".to_string(),
+            retry_max: 10,
+            retry_base_delay_ms: 500,
         };
 
         // Test formatting with icon by ID
@@ -117,5 +127,28 @@ mod tests {
         assert!(config.format_icons.is_empty());
         assert!(!config.show_window_count);
         assert_eq!(config.sort_by, "number");
+        assert_eq!(config.retry_max, 10);
+        assert_eq!(config.retry_base_delay_ms, 500);
+    }
+
+    #[test]
+    fn test_custom_retry_config() {
+        let json = r#"{
+            "format": "{name}",
+            "show_empty": false,
+            "separator": " ",
+            "format_icons": {},
+            "show_window_count": false,
+            "sort_by": "number",
+            "retry_max": 5,
+            "retry_base_delay_ms": 1000
+        }"#;
+
+        let config: ModuleConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.retry_max, 5);
+        assert_eq!(config.retry_base_delay_ms, 1000);
+        // Other fields should be as specified
+        assert_eq!(config.show_empty, false);
+        assert_eq!(config.separator, " ");
     }
 }
