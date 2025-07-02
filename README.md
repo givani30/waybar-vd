@@ -196,49 +196,6 @@ The module applies CSS classes that you can style:
 - `.vdesk-unfocused` - Applied to unfocused virtual desktops
 - `.hidden` - Applied to empty virtual desktops when `show_empty` is false
 
-## Migration from Shell Script
-
-If you're migrating from the shell script-based virtual desktop module:
-
-### 1. Replace Module Configuration
-
-**Old (shell script):**
-```json
-"custom/vdesk-1": {
-    "format": "{}",
-    "return-type": "json",
-    "exec": "~/.config/waybar/scripts/virtual-desktop.sh 1",
-    "on-click": "~/.config/waybar/scripts/virtual-desktop.sh 1 click",
-    "interval": "once",
-    "signal": 8
-}
-```
-
-**New (CFFI):**
-```json
-"cffi/virtual-desktops": {
-    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
-    "format": "{name}",
-    "show_empty": false
-}
-```
-
-### 2. Update Module List
-
-**Old:**
-```json
-"modules-center": ["custom/vdesk-1", "custom/vdesk-2", "custom/vdesk-3", "custom/vdesk-4", "custom/vdesk-5"]
-```
-
-**New:**
-```json
-"modules-center": ["cffi/virtual-desktops"]
-```
-
-### 3. Remove Signal Handling
-
-The CFFI module handles real-time updates automatically, so you can remove any signal-based update scripts.
-
 ## Troubleshooting
 
 ### Module Not Loading
@@ -279,8 +236,12 @@ cargo test
 ```
 
 ### Testing
+Run cargo test for unit test:
+```bash
+cargo test
+```
 
-Use the self-contained test system in the repository:
+There is also a self-contained test suite in the `test` directory, which spawns a waybar instance with a minimal configuration to test the module in isolation:
 
 ```bash
 # Check prerequisites

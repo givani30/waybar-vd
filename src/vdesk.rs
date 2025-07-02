@@ -1,47 +1,4 @@
-//! # Virtual Desktop Management Module
-//!
-//! Provides data structures and management logic for Hyprland virtual desktops.
-//! Handles parsing of Hyprland IPC responses, state management, and virtual
-//! desktop lifecycle operations.
-//!
-//! # Core Concepts
-//!
-//! - **Virtual Desktop**: A logical grouping of workspaces with shared properties
-//! - **Workspace**: Individual Hyprland workspace within a virtual desktop
-//! - **State Management**: Thread-safe tracking of virtual desktop changes
-//! - **JSON Parsing**: Robust deserialization of Hyprland IPC responses
-//!
-//! # Data Flow
-//!
-//! 1. **IPC Response**: Raw JSON from Hyprland workspace queries
-//! 2. **Parsing**: Deserialize into structured `VirtualDesktop` objects
-//! 3. **State Update**: Update manager state with new virtual desktop information
-//! 4. **UI Notification**: Trigger widget updates through callback mechanism
-//!
-//! # Error Handling
-//!
-//! - **JSON Validation**: Comprehensive parsing error handling
-//! - **State Consistency**: Atomic updates to prevent race conditions
-//! - **Graceful Degradation**: Continue operation with partial data
-//!
-//! # Example Usage
-//!
-//! ```rust
-//! use waybar_virtual_desktops_cffi::vdesk::{VirtualDesktopsManager, VirtualDesktop};
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let mut manager = VirtualDesktopsManager::new();
-//!
-//! // Parse Hyprland workspace JSON
-//! let json_response = r#"[{"id": 1, "name": "Desktop 1", "windows": 2}]"#;
-//! manager.update_from_json(json_response)?;
-//!
-//! // Get current virtual desktops
-//! let desktops = manager.get_virtual_desktops();
-//! println!("Found {} virtual desktops", desktops.len());
-//! # Ok(())
-//! # }
-//! ```
+//! Virtual desktop management and state tracking
 
 // src/vdesk.rs
 use crate::hyprland::HyprlandIPC;
@@ -97,7 +54,6 @@ impl VirtualDesktopsManager {
             self.ipc = Some(HyprlandIPC::new().await?);
         }
 
-        // Get virtual desktop state from Hyprland
         let state = {
             let ipc = self.ipc.as_mut().unwrap();
             ipc.get_virtual_desktop_state().await?
@@ -105,7 +61,6 @@ impl VirtualDesktopsManager {
 
 
 
-        // Parse the state and update our virtual desktops
         self.parse_virtual_desktop_state(&state)?;
 
         Ok(())
@@ -122,14 +77,11 @@ impl VirtualDesktopsManager {
     }
     
     fn parse_virtual_desktop_state(&mut self, state: &str) -> Result<()> {
-        // Clear current state
         self.virtual_desktops.clear();
 
-        // Parse the JSON output from hyprctl printstate -j
         let virtual_desktops: Vec<VirtualDesktop> = serde_json::from_str(state)
             .map_err(|e| anyhow::anyhow!("Failed to parse virtual desktop JSON: {}", e))?;
 
-        // Store the virtual desktops in our HashMap
         for vdesk in virtual_desktops {
             self.virtual_desktops.insert(vdesk.id, vdesk);
         }
@@ -204,12 +156,10 @@ mod tests {
     fn test_parse_invalid_json() {
         let mut manager = VirtualDesktopsManager::new();
 
-        // Test with invalid JSON
         let invalid_json = "{ invalid json }";
         let result = manager.parse_virtual_desktop_state(invalid_json);
         assert!(result.is_err());
 
-        // Verify state is cleared on error (should be empty)
         let vdesks = manager.get_virtual_desktops();
         assert_eq!(vdesks.len(), 0);
     }

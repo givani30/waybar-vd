@@ -1,39 +1,4 @@
-//! # Hyprland IPC Module
-//!
-//! Provides secure and efficient communication with Hyprland's IPC interface
-//! for virtual desktop management. Implements formal validation, async operations,
-//! and comprehensive error handling.
-//!
-//! # Security Features
-//!
-//! - **Formal Validation**: Regex-based instance signature validation
-//! - **Path Sanitization**: Prevents path traversal and injection attacks
-//! - **Input Validation**: Strict validation of all external inputs
-//!
-//! # Performance Characteristics
-//!
-//! - **Async Operations**: Non-blocking IPC communication
-//! - **Connection Reuse**: Persistent Unix socket connections
-//! - **Minimal Overhead**: Direct socket communication without shell commands
-//!
-//! # Error Handling
-//!
-//! - **Environment Validation**: Comprehensive HYPRLAND_INSTANCE_SIGNATURE checks
-//! - **Connection Resilience**: Automatic reconnection on socket failures
-//! - **Graceful Degradation**: Continues operation when Hyprland is unavailable
-//!
-//! # Example Usage
-//!
-//! ```rust
-//! use waybar_virtual_desktops_cffi::hyprland::HyprlandIPC;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let ipc = HyprlandIPC::new().await?;
-//! let response = ipc.send_command("j/workspaces").await?;
-//! println!("Workspaces: {}", response);
-//! # Ok(())
-//! # }
-//! ```
+//! Hyprland IPC communication for virtual desktop management
 
 // src/hyprland.rs
 use anyhow::{anyhow, Result};
@@ -44,33 +9,13 @@ use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::UnixStream;
 
-/// Formal regex pattern for validating Hyprland instance signatures
-///
-/// Security Requirements:
-/// - Must be alphanumeric with optional underscores and hyphens
-/// - Length between 1 and 64 characters (reasonable bounds)
-/// - No path traversal sequences (.., /, \)
-/// - No control characters or special shell characters
-///
-/// Pattern explanation:
-/// ^[a-zA-Z0-9_-]{1,64}$
-/// - ^ : Start of string
-/// - [a-zA-Z0-9_-] : Only alphanumeric, underscore, and hyphen characters
-/// - {1,64} : Between 1 and 64 characters
-/// - $ : End of string
+/// Regex pattern for validating Hyprland instance signatures
 static INSTANCE_SIGNATURE_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[a-zA-Z0-9_-]{1,64}$")
         .expect("Invalid regex pattern for instance signature validation")
 });
 
-/// Validates Hyprland instance signature using formal language recognition
-///
-/// This replaces ad-hoc string matching with a formal regex-based approach
-/// that provides comprehensive security validation against:
-/// - Path traversal attacks
-/// - Shell injection attempts
-/// - Control character injection
-/// - Excessive length attacks
+/// Validates Hyprland instance signature
 fn validate_instance_signature(signature: &str) -> Result<()> {
     if signature.is_empty() {
         return Err(anyhow!("Invalid HYPRLAND_INSTANCE_SIGNATURE: empty signature"));
@@ -88,52 +33,7 @@ fn validate_instance_signature(signature: &str) -> Result<()> {
     Ok(())
 }
 
-/// Hyprland IPC client for virtual desktop management
-///
-/// Provides a secure, async interface to Hyprland's IPC system for querying
-/// and controlling virtual desktops. Implements formal validation and efficient
-/// Unix socket communication.
-///
-/// # Security Model
-///
-/// The client validates all inputs using formal regex patterns to prevent:
-/// - Path traversal attacks
-/// - Shell injection vulnerabilities
-/// - Control character exploitation
-/// - Buffer overflow attempts
-///
-/// # Performance Design
-///
-/// - **Async Operations**: All IPC calls are non-blocking
-/// - **Direct Socket Access**: Bypasses shell commands for efficiency
-/// - **Connection Pooling**: Reuses socket connections when possible
-/// - **Minimal Parsing**: Streams responses without full buffering
-///
-/// # Error Recovery
-///
-/// The client handles various failure modes:
-/// - Socket connection failures
-/// - Malformed responses from Hyprland
-/// - Environment variable corruption
-/// - Permission denied errors
-///
-/// # Example Usage
-///
-/// ```rust
-/// use waybar_virtual_desktops_cffi::hyprland::HyprlandIPC;
-///
-/// # async fn example() -> anyhow::Result<()> {
-/// // Create IPC client with automatic environment validation
-/// let ipc = HyprlandIPC::new().await?;
-///
-/// // Query current workspaces
-/// let workspaces = ipc.send_command("j/workspaces").await?;
-///
-/// // Switch to virtual desktop 2
-/// ipc.send_command("dispatch vdesk 2").await?;
-/// # Ok(())
-/// # }
-/// ```
+/// Hyprland IPC client
 #[derive(Debug)]
 pub struct HyprlandIPC {
     socket_path: PathBuf,
@@ -151,7 +51,7 @@ impl HyprlandIPC {
         let instance_signature = env::var("HYPRLAND_INSTANCE_SIGNATURE")
             .map_err(|_| anyhow!("HYPRLAND_INSTANCE_SIGNATURE not set"))?;
 
-        // Validate instance signature using formal regex-based validation
+        // Validate instance signature
         validate_instance_signature(&instance_signature)?;
 
         let runtime_dir = env::var("XDG_RUNTIME_DIR")
@@ -167,7 +67,6 @@ impl HyprlandIPC {
             .join(&instance_signature)
             .join(".socket2.sock");
         
-        // Verify sockets exist
         if !socket_path.exists() {
             return Err(anyhow!("Hyprland command socket not found: {:?}", socket_path));
         }
@@ -193,7 +92,6 @@ impl HyprlandIPC {
         loop {
             match self.try_listen_for_events().await {
                 Ok(event) => {
-                    // Successfully received event, return immediately
                     return Ok(event);
                 }
                 Err(e) => {
@@ -204,13 +102,13 @@ impl HyprlandIPC {
                         return Err(anyhow::anyhow!("Event listening failed after {} retries: {}", max_retries, e));
                     }
 
-                    // Exponential backoff with jitter to prevent thundering herd
+                    // Exponential backoff with jitter
                     let base_delay = std::cmp::min(
                         base_delay_ms * 2_u64.pow(retry_count - 1),
                         MAX_DELAY_MS
                     );
 
-                    // Add ±25% jitter to prevent synchronized retries
+                    // Add ±25% jitter
                     let jitter_range = base_delay / 4; // 25% of base delay
                     let jitter = fastrand::u64(0..=jitter_range * 2); // 0 to 50% of base
                     let delay_ms = base_delay.saturating_sub(jitter_range).saturating_add(jitter);
@@ -231,7 +129,6 @@ impl HyprlandIPC {
 
         while let Some(line) = lines.next_line().await? {
             log::debug!("Received event: {}", line);
-            // Filter for virtual desktop events
             if line.starts_with("vdesk>>") {
                 return Ok(line);
             }
@@ -241,18 +138,15 @@ impl HyprlandIPC {
     }
     
     pub async fn get_virtual_desktop_state(&self) -> Result<String> {
-        // Send command directly to Hyprland socket for JSON format
         self.send_command("j/printstate").await
     }
     
     pub async fn get_virtual_desktop_info(&self, vdesk_id: u32) -> Result<String> {
-        // Send command directly to Hyprland socket
         let command = format!("printdesk {}", vdesk_id);
         self.send_command(&command).await
     }
     
     pub async fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        // Send dispatch command directly to Hyprland socket
         let command = format!("dispatch vdesk {}", vdesk_id);
         self.send_command(&command).await?;
         Ok(())
@@ -264,10 +158,8 @@ impl HyprlandIPC {
 
         let mut stream = UnixStream::connect(&self.socket_path).await?;
 
-        // Write the command to the socket
         stream.write_all(command.as_bytes()).await?;
 
-        // Read the response
         let mut response = Vec::new();
         stream.read_to_end(&mut response).await?;
 
@@ -281,8 +173,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_hyprland_ipc_creation() {
-        // This test will only work if Hyprland is running
-        // and environment variables are set
         if env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() {
             let result = HyprlandIPC::new().await;
             match result {
@@ -296,7 +186,6 @@ mod tests {
     async fn test_environment_variable_validation() {
         std::env::set_var("XDG_RUNTIME_DIR", "/tmp");
 
-        // Test path traversal protection
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", "../malicious");
         let result = HyprlandIPC::new().await;
         assert!(result.is_err(), "Should reject path traversal attempts");
@@ -304,7 +193,6 @@ mod tests {
             assert!(e.to_string().contains("unsafe characters"));
         }
 
-        // Test empty signature
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", "");
         let result = HyprlandIPC::new().await;
         assert!(result.is_err(), "Should reject empty signature");
@@ -312,7 +200,6 @@ mod tests {
             assert!(e.to_string().contains("empty signature"));
         }
 
-        // Test signature with slash
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", "test/malicious");
         let result = HyprlandIPC::new().await;
         assert!(result.is_err(), "Should reject signature with slash");
@@ -320,23 +207,18 @@ mod tests {
             assert!(e.to_string().contains("unsafe characters"));
         }
 
-        // Test signature with special characters
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", "test$malicious");
         let result = HyprlandIPC::new().await;
         assert!(result.is_err(), "Should reject signature with special characters");
 
-        // Test signature that's too long
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", &"a".repeat(65));
         let result = HyprlandIPC::new().await;
         assert!(result.is_err(), "Should reject signature that's too long");
 
-        // Test valid signatures
         for valid_sig in &["test123", "hypr_instance", "session-1", "a", "A1_-test"] {
             std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", valid_sig);
-            // Note: This will still fail because sockets don't exist, but validation should pass
             let result = HyprlandIPC::new().await;
             if let Err(e) = result {
-                // Should fail on socket not found, not validation
                 assert!(e.to_string().contains("socket not found") || e.to_string().contains("No such file"));
             }
         }
@@ -344,14 +226,11 @@ mod tests {
 
     #[test]
     fn test_instance_signature_validation() {
-        // Test valid signatures
         assert!(validate_instance_signature("test123").is_ok());
         assert!(validate_instance_signature("hypr_instance").is_ok());
         assert!(validate_instance_signature("session-1").is_ok());
         assert!(validate_instance_signature("a").is_ok());
         assert!(validate_instance_signature("A1_-test").is_ok());
-
-        // Test invalid signatures
         assert!(validate_instance_signature("").is_err());
         assert!(validate_instance_signature("../malicious").is_err());
         assert!(validate_instance_signature("test/malicious").is_err());

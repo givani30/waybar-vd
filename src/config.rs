@@ -1,116 +1,69 @@
-//! # Configuration Module
-//!
-//! Provides configuration structures and utilities for the Waybar Virtual Desktops
-//! CFFI module. Supports comprehensive customization of display format, behavior,
-//! and performance parameters.
-//!
-//! # Configuration Options
-//!
-//! The module supports extensive configuration through the `ModuleConfig` struct:
-//!
-//! - **Display Format**: Customizable format strings with placeholders
-//! - **Icon Mapping**: Per-desktop icon configuration
-//! - **Visibility Control**: Show/hide empty virtual desktops
-//! - **Performance Tuning**: Retry logic and backoff parameters
-//! - **Sorting Options**: Multiple sorting strategies
-//!
-//! # Format Placeholders
-//!
-//! The following placeholders are supported in format strings:
-//!
-//! - `{name}`: Virtual desktop name
-//! - `{icon}`: Mapped icon for the desktop
-//! - `{id}`: Numeric desktop identifier
-//! - `{window_count}`: Number of windows on the desktop
-//!
-//! # Example Configuration
-//!
-//! ```json
-//! {
-//!   "format": "{icon} {name}",
-//!   "format_icons": {
-//!     "1": "󰋇",
-//!     "2": "󰍉"
-//!   },
-//!   "show_empty": false,
-//!   "show_window_count": true,
-//!   "separator": " ",
-//!   "sort_by": "number",
-//!   "retry_max": 10,
-//!   "retry_base_delay_ms": 500
-//! }
-//! ```
+//! Configuration for virtual desktop display and behavior
 
 // src/config.rs
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Configuration structure for the Virtual Desktops module
-///
-/// This struct defines all configurable aspects of the module behavior,
-/// from display formatting to performance parameters. All fields have
-/// sensible defaults and support serde deserialization.
-///
-/// # Field Descriptions
-///
-/// - `format`: Template string for desktop display (supports placeholders)
-/// - `show_empty`: Whether to display virtual desktops with no windows
-/// - `separator`: String used to separate multiple desktop elements
-/// - `format_icons`: Mapping of desktop IDs/names to display icons
-/// - `show_window_count`: Include window count in tooltip information
-/// - `sort_by`: Sorting strategy ("number", "name", "focused-first")
-/// - `retry_max`: Maximum IPC retry attempts before failure
-/// - `retry_base_delay_ms`: Base delay for exponential backoff (milliseconds)
-///
-/// # Performance Tuning
-///
-/// The retry parameters allow fine-tuning of the IPC resilience:
-/// - Higher `retry_max`: More persistent but slower failure detection
-/// - Lower `retry_base_delay_ms`: Faster retries but higher CPU usage
-///
-/// # Examples
-///
-/// Basic configuration:
-/// ```rust
-/// use waybar_virtual_desktops_cffi::config::ModuleConfig;
-///
-/// let config = ModuleConfig {
-///     format: "{icon} {name}".to_string(),
-///     show_empty: false,
-///     ..Default::default()
-/// };
-/// ```
+/// Virtual desktop sorting strategy
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SortStrategy {
+    Number,
+    Name,
+    #[serde(rename = "focused-first")]
+    FocusedFirst,
+}
+
+impl Default for SortStrategy {
+    fn default() -> Self {
+        Self::Number
+    }
+}
+
+impl std::fmt::Display for SortStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number => write!(f, "number"),
+            Self::Name => write!(f, "name"),
+            Self::FocusedFirst => write!(f, "focused-first"),
+        }
+    }
+}
+
+impl std::str::FromStr for SortStrategy {
+    type Err = crate::errors::VirtualDesktopError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "number" => Ok(Self::Number),
+            "name" => Ok(Self::Name),
+            "focused-first" => Ok(Self::FocusedFirst),
+            _ => Err(crate::errors::VirtualDesktopError::invalid_config(
+                "sort_by",
+                s,
+                "must be 'number', 'name', or 'focused-first'"
+            )),
+        }
+    }
+}
+
+/// Virtual desktop module configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleConfig {
-    /// Display format for virtual desktop names
     #[serde(default = "default_format")]
     pub format: String,
-
-    /// Whether to show empty virtual desktops
     #[serde(default = "default_show_empty")]
     pub show_empty: bool,
-
-    /// Separator between virtual desktop elements
     #[serde(default = "default_separator")]
     pub separator: String,
-
-    /// Icon mapping for virtual desktop IDs
     #[serde(default)]
     pub format_icons: HashMap<String, String>,
-
-    /// Show window count in tooltip
     #[serde(default = "default_show_window_count")]
     pub show_window_count: bool,
-
-    /// Sort method: "number", "name", "focused-first"
-    #[serde(default = "default_sort_by")]
-    pub sort_by: String,
-
-    /// Maximum number of retry attempts for IPC operations
+    #[serde(default)]
+    pub sort_by: SortStrategy,
     #[serde(default = "default_retry_max")]
     pub retry_max: u32,
-
-    /// Base delay in milliseconds for exponential backoff
     #[serde(default = "default_retry_base_delay_ms")]
     pub retry_base_delay_ms: u64,
 }
@@ -132,9 +85,6 @@ fn default_show_window_count() -> bool {
     false
 }
 
-fn default_sort_by() -> String {
-    "number".to_string()
-}
 
 fn default_retry_max() -> u32 {
     10
@@ -152,7 +102,7 @@ impl Default for ModuleConfig {
             separator: default_separator(),
             format_icons: HashMap::new(),
             show_window_count: default_show_window_count(),
-            sort_by: default_sort_by(),
+            sort_by: SortStrategy::default(),
             retry_max: default_retry_max(),
             retry_base_delay_ms: default_retry_base_delay_ms(),
         }
@@ -160,7 +110,44 @@ impl Default for ModuleConfig {
 }
 
 impl ModuleConfig {
-    /// Format a virtual desktop name according to the configured format
+    /// Validate configuration parameters
+    pub fn validate(&self) -> Result<(), crate::errors::VirtualDesktopError> {
+        if !self.format.contains('{') {
+            return Err(crate::errors::VirtualDesktopError::invalid_config(
+                "format",
+                &self.format,
+                "must contain at least one placeholder like {name}, {icon}, {id}, or {window_count}"
+            ));
+        }
+
+        if self.retry_max == 0 {
+            return Err(crate::errors::VirtualDesktopError::invalid_config(
+                "retry_max",
+                &self.retry_max.to_string(),
+                "must be greater than 0"
+            ));
+        }
+
+        if self.retry_max > 50 {
+            return Err(crate::errors::VirtualDesktopError::invalid_config(
+                "retry_max",
+                &self.retry_max.to_string(),
+                "must be 50 or less to prevent excessive delays"
+            ));
+        }
+
+        if self.retry_base_delay_ms > 10000 {
+            return Err(crate::errors::VirtualDesktopError::invalid_config(
+                "retry_base_delay_ms",
+                &self.retry_base_delay_ms.to_string(),
+                "must be 10000ms or less to prevent excessive delays"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Format virtual desktop display text
     pub fn format_virtual_desktop(&self, name: &str, id: u32, window_count: u32) -> String {
         let icon = self.format_icons
             .get(&id.to_string())
@@ -175,7 +162,7 @@ impl ModuleConfig {
             .replace("{window_count}", &window_count.to_string())
     }
     
-    /// Generate tooltip text for a virtual desktop
+    /// Generate tooltip text
     pub fn format_tooltip(&self, name: &str, id: u32, window_count: u32, focused: bool) -> String {
         let mut tooltip = format!("Virtual Desktop {}: {}", id, name);
         
@@ -207,24 +194,20 @@ mod tests {
             separator: " | ".to_string(),
             format_icons,
             show_window_count: true,
-            sort_by: "number".to_string(),
+            sort_by: SortStrategy::Number,
             retry_max: 10,
             retry_base_delay_ms: 500,
         };
 
-        // Test formatting with icon by ID
         let result = config.format_virtual_desktop("Home", 1, 3);
         assert_eq!(result, "🏠 Home (3)");
 
-        // Test formatting with icon by name
         let result = config.format_virtual_desktop("Work", 2, 5);
         assert_eq!(result, "💼 Work (5)");
 
-        // Test formatting without icon
         let result = config.format_virtual_desktop("Other", 3, 0);
         assert_eq!(result, " Other (0)");
 
-        // Test tooltip formatting
         let tooltip = config.format_tooltip("Home", 1, 3, true);
         assert_eq!(tooltip, "Virtual Desktop 1: Home (3 windows) - focused");
 
@@ -241,7 +224,7 @@ mod tests {
         assert_eq!(config.separator, " ");
         assert!(config.format_icons.is_empty());
         assert!(!config.show_window_count);
-        assert_eq!(config.sort_by, "number");
+        assert_eq!(config.sort_by, SortStrategy::Number);
         assert_eq!(config.retry_max, 10);
         assert_eq!(config.retry_base_delay_ms, 500);
     }
@@ -262,14 +245,12 @@ mod tests {
         let config: ModuleConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.retry_max, 5);
         assert_eq!(config.retry_base_delay_ms, 1000);
-        // Other fields should be as specified
         assert_eq!(config.show_empty, false);
         assert_eq!(config.separator, " ");
     }
 
     #[test]
     fn test_direct_config_deserialization() {
-        // Test direct format
         let direct_json = r#"{
             "format": "{icon} {name}",
             "show_empty": true,
@@ -287,26 +268,68 @@ mod tests {
         assert_eq!(config.separator, " | ");
         assert_eq!(config.format_icons.get("1"), Some(&"🏠".to_string()));
         assert_eq!(config.show_window_count, true);
-        assert_eq!(config.sort_by, "focused-first");
+        assert_eq!(config.sort_by, SortStrategy::FocusedFirst);
         assert_eq!(config.retry_max, 15);
         assert_eq!(config.retry_base_delay_ms, 750);
     }
 
     #[test]
     fn test_config_with_defaults() {
-        // Test minimal config with defaults
         let minimal_json = r#"{
             "format": "{name}"
         }"#;
 
         let config: ModuleConfig = serde_json::from_str(minimal_json).unwrap();
         assert_eq!(config.format, "{name}");
-        assert_eq!(config.show_empty, false); // default
-        assert_eq!(config.separator, " "); // default
-        assert!(config.format_icons.is_empty()); // default
-        assert_eq!(config.show_window_count, false); // default
-        assert_eq!(config.sort_by, "number"); // default
-        assert_eq!(config.retry_max, 10); // default
-        assert_eq!(config.retry_base_delay_ms, 500); // default
+        assert_eq!(config.show_empty, false);
+        assert_eq!(config.separator, " ");
+        assert!(config.format_icons.is_empty());
+        assert_eq!(config.show_window_count, false);
+        assert_eq!(config.sort_by, SortStrategy::Number);
+        assert_eq!(config.retry_max, 10);
+        assert_eq!(config.retry_base_delay_ms, 500);
+    }
+
+    #[test]
+    fn test_config_validation() {
+        let valid_config = ModuleConfig::default();
+        assert!(valid_config.validate().is_ok());
+
+        let invalid_format = ModuleConfig {
+            format: "no placeholders".to_string(),
+            ..Default::default()
+        };
+        assert!(invalid_format.validate().is_err());
+
+        let invalid_retry = ModuleConfig {
+            retry_max: 0,
+            ..Default::default()
+        };
+        assert!(invalid_retry.validate().is_err());
+
+        let invalid_retry_high = ModuleConfig {
+            retry_max: 100,
+            ..Default::default()
+        };
+        assert!(invalid_retry_high.validate().is_err());
+
+        let invalid_delay = ModuleConfig {
+            retry_base_delay_ms: 20000,
+            ..Default::default()
+        };
+        assert!(invalid_delay.validate().is_err());
+    }
+
+    #[test]
+    fn test_sort_strategy_parsing() {
+        assert_eq!("number".parse::<SortStrategy>().unwrap(), SortStrategy::Number);
+        assert_eq!("name".parse::<SortStrategy>().unwrap(), SortStrategy::Name);
+        assert_eq!("focused-first".parse::<SortStrategy>().unwrap(), SortStrategy::FocusedFirst);
+
+        assert!("invalid".parse::<SortStrategy>().is_err());
+
+        assert_eq!(SortStrategy::Number.to_string(), "number");
+        assert_eq!(SortStrategy::Name.to_string(), "name");
+        assert_eq!(SortStrategy::FocusedFirst.to_string(), "focused-first");
     }
 }
