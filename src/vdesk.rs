@@ -1,14 +1,17 @@
 use crate::hyprland::HyprlandIPC;
 use anyhow::Result;
 use std::collections::HashMap;
+use serde::Deserialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct VirtualDesktop {
     pub id: u32,
     pub name: String,
     pub focused: bool,
     pub populated: bool,
+    #[serde(rename = "windows")]
     pub window_count: u32,
+    pub workspaces: Vec<u32>,
 }
 
 impl VirtualDesktop {
@@ -19,6 +22,7 @@ impl VirtualDesktop {
             focused: false,
             populated: false,
             window_count: 0,
+            workspaces: Vec::new(),
         }
     }
 }
@@ -53,20 +57,10 @@ impl VirtualDesktopsManager {
             ipc.get_virtual_desktop_state().await?
         };
 
+
+
         // Parse the state and update our virtual desktops
         self.parse_virtual_desktop_state(&state)?;
-
-        // Update individual virtual desktop info for names
-        for vdesk_id in 1..=5 {
-            let vdesk_info = {
-                let ipc = self.ipc.as_mut().unwrap();
-                ipc.get_virtual_desktop_info(vdesk_id).await
-            };
-
-            if let Ok(info) = vdesk_info {
-                self.update_virtual_desktop_name(vdesk_id, &info)?;
-            }
-        }
 
         Ok(())
     }
@@ -84,70 +78,20 @@ impl VirtualDesktopsManager {
     fn parse_virtual_desktop_state(&mut self, state: &str) -> Result<()> {
         // Clear current state
         self.virtual_desktops.clear();
-        
-        // Parse the printstate output
-        // Format: "Virtual desk 1:    Focus\n    Focused: true\n    Populated: true\n    Windows: 2\n"
-        let lines: Vec<&str> = state.lines().collect();
-        let mut current_vdesk: Option<VirtualDesktop> = None;
-        
-        for line in lines {
-            let line = line.trim();
-            
-            if line.starts_with("Virtual desk ") {
-                // Save previous virtual desktop if exists
-                if let Some(vdesk) = current_vdesk.take() {
-                    self.virtual_desktops.insert(vdesk.id, vdesk);
-                }
-                
-                // Parse new virtual desktop
-                if let Some(colon_pos) = line.find(':') {
-                    let desk_part = &line[..colon_pos];
-                    let name_part = line[colon_pos + 1..].trim();
-                    
-                    if let Some(id_str) = desk_part.strip_prefix("Virtual desk ") {
-                        if let Ok(id) = id_str.parse::<u32>() {
-                            current_vdesk = Some(VirtualDesktop::new(id, name_part.to_string()));
-                        }
-                    }
-                }
-            } else if let Some(ref mut vdesk) = current_vdesk {
-                if line.starts_with("Focused: ") {
-                    vdesk.focused = line.ends_with("true");
-                } else if line.starts_with("Populated: ") {
-                    vdesk.populated = line.ends_with("true");
-                } else if line.starts_with("Windows: ") {
-                    if let Some(count_str) = line.strip_prefix("Windows: ") {
-                        vdesk.window_count = count_str.parse().unwrap_or(0);
-                    }
-                }
-            }
-        }
-        
-        // Save the last virtual desktop
-        if let Some(vdesk) = current_vdesk {
+
+        // Parse the JSON output from hyprctl printstate -j
+        let virtual_desktops: Vec<VirtualDesktop> = serde_json::from_str(state)
+            .map_err(|e| anyhow::anyhow!("Failed to parse virtual desktop JSON: {}", e))?;
+
+        // Store the virtual desktops in our HashMap
+        for vdesk in virtual_desktops {
             self.virtual_desktops.insert(vdesk.id, vdesk);
         }
-        
-        Ok(())
-    }
-
-    fn update_virtual_desktop_name(&mut self, vdesk_id: u32, vdesk_info: &str) -> Result<()> {
-        // Parse printdesk output: "Virtual desk 1:    Focus"
-        if let Some(colon_pos) = vdesk_info.find(':') {
-            let name_part = vdesk_info[colon_pos + 1..].trim();
-
-            // Update or create virtual desktop with the name
-            if let Some(vdesk) = self.virtual_desktops.get_mut(&vdesk_id) {
-                vdesk.name = name_part.to_string();
-            } else {
-                // Create new virtual desktop if it doesn't exist
-                let vdesk = VirtualDesktop::new(vdesk_id, name_part.to_string());
-                self.virtual_desktops.insert(vdesk_id, vdesk);
-            }
-        }
 
         Ok(())
     }
+
+
 }
 
 #[cfg(test)]
@@ -157,23 +101,29 @@ mod tests {
     #[test]
     fn test_parse_virtual_desktop_state() {
         let mut manager = VirtualDesktopsManager::new();
-        
-        let state = r#"Virtual desks
-Virtual desk 1:    Focus
-    Focused: true
-    Populated: true
-    Windows: 2
 
-Virtual desk 2:    Research
-    Focused: false
-    Populated: true
-    Windows: 1
-
-Virtual desk 3:    Comms
-    Focused: false
-    Populated: false
-    Windows: 0
-"#;
+        let state = r#"[{
+    "id": 1,
+    "name": "  Focus",
+    "focused": true,
+    "populated": true,
+    "workspaces": [1, 2],
+    "windows": 2
+},{
+    "id": 2,
+    "name": "󰍉 Research",
+    "focused": false,
+    "populated": true,
+    "workspaces": [3, 4],
+    "windows": 1
+},{
+    "id": 3,
+    "name": "󰵅  Comms",
+    "focused": false,
+    "populated": false,
+    "workspaces": [],
+    "windows": 0
+}]"#;
         
         manager.parse_virtual_desktop_state(state).unwrap();
         
@@ -182,21 +132,23 @@ Virtual desk 3:    Comms
         
         let focus_vdesk = &vdesks[0];
         assert_eq!(focus_vdesk.id, 1);
-        assert_eq!(focus_vdesk.name, "Focus");
+        assert_eq!(focus_vdesk.name, "  Focus");
         assert!(focus_vdesk.focused);
         assert!(focus_vdesk.populated);
         assert_eq!(focus_vdesk.window_count, 2);
-        
+        assert_eq!(focus_vdesk.workspaces, vec![1, 2]);
+
         let research_vdesk = &vdesks[1];
         assert_eq!(research_vdesk.id, 2);
-        assert_eq!(research_vdesk.name, "Research");
+        assert_eq!(research_vdesk.name, "󰍉 Research");
         assert!(!research_vdesk.focused);
         assert!(research_vdesk.populated);
         assert_eq!(research_vdesk.window_count, 1);
-        
+        assert_eq!(research_vdesk.workspaces, vec![3, 4]);
+
         let comms_vdesk = &vdesks[2];
         assert_eq!(comms_vdesk.id, 3);
-        assert_eq!(comms_vdesk.name, "Comms");
+        assert_eq!(comms_vdesk.name, "󰵅  Comms");
         assert!(!comms_vdesk.focused);
         assert!(!comms_vdesk.populated);
         assert_eq!(comms_vdesk.window_count, 0);

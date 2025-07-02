@@ -4,7 +4,7 @@ use std::thread;
 use anyhow::Result;
 use serde::Deserialize;
 use waybar_cffi::{
-    gtk::{prelude::*, Label, Box as GtkBox, Orientation},
+    gtk::{self, prelude::*, Label, Box as GtkBox, Orientation, EventBox},
     waybar_module, InitInfo, Module,
 };
 
@@ -76,6 +76,11 @@ impl Module for VirtualDesktopsModule {
     type Config = Config;
 
     fn init(info: &InitInfo, config: Self::Config) -> Self {
+        // Initialize logging (only if not already initialized)
+        let _ = env_logger::try_init();
+
+        log::info!("Virtual Desktops CFFI module initializing...");
+
         // Convert waybar config to internal config
         let module_config = ModuleConfig {
             format: config.format,
@@ -86,10 +91,13 @@ impl Module for VirtualDesktopsModule {
             sort_by: config.sort_by,
         };
 
+        log::debug!("Module config: format={}, show_empty={}", module_config.format, module_config.show_empty);
+
         // Create the container widget
         let container = info.get_root_widget();
         let hbox = GtkBox::new(Orientation::Horizontal, 0);
         container.add(&hbox);
+        log::debug!("Created GTK container widget");
 
         // Initialize the virtual desktops manager
         let manager = Arc::new(Mutex::new(VirtualDesktopsManager::new()));
@@ -97,12 +105,20 @@ impl Module for VirtualDesktopsModule {
         // Start background thread for IPC monitoring
         let manager_clone = Arc::clone(&manager);
         thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                if let Err(e) = monitor_virtual_desktops(manager_clone).await {
-                    log::error!("Virtual desktop monitoring failed: {}", e);
+            match tokio::runtime::Runtime::new() {
+                Ok(rt) => {
+                    rt.block_on(async {
+                        if let Err(e) = monitor_virtual_desktops(manager_clone).await {
+                            eprintln!("Virtual desktop monitoring failed: {}", e);
+                            log::error!("Virtual desktop monitoring failed: {}", e);
+                        }
+                    });
                 }
-            });
+                Err(e) => {
+                    eprintln!("Failed to create tokio runtime: {}", e);
+                    log::error!("Failed to create tokio runtime: {}", e);
+                }
+            }
         });
 
         let mut module = Self {
@@ -113,8 +129,10 @@ impl Module for VirtualDesktopsModule {
         };
 
         // Initial update
+        log::debug!("Performing initial update");
         module.update();
 
+        log::info!("Virtual Desktops CFFI module initialized successfully");
         module
     }
 
@@ -137,16 +155,17 @@ impl Module for VirtualDesktopsModule {
 
 impl VirtualDesktopsModule {
     fn update_display(&mut self) {
-        // Clear existing labels
-        for label in &self.labels {
-            self.container.remove(label);
+        // Clear existing labels and their containers
+        let children: Vec<gtk::Widget> = self.container.children();
+        for child in children {
+            self.container.remove(&child);
         }
         self.labels.clear();
-        
+
         // Get virtual desktops from manager
         let manager = self.manager.lock().unwrap();
         let virtual_desktops = manager.get_virtual_desktops();
-        
+
         // Create new labels for each virtual desktop
         for vdesk in virtual_desktops {
             if !vdesk.populated && !vdesk.focused && !self.config.show_empty {
@@ -161,7 +180,7 @@ impl VirtualDesktopsModule {
             );
             
             let label = Label::new(Some(&display_text));
-            
+
             // Set tooltip with detailed information
             let tooltip_text = self.config.format_tooltip(
                 &vdesk.name,
@@ -170,7 +189,22 @@ impl VirtualDesktopsModule {
                 vdesk.focused
             );
             label.set_tooltip_text(Some(&tooltip_text));
-            
+
+            // Make the label clickable
+            let event_box = EventBox::new();
+            event_box.add(&label);
+
+            // Set up click handler
+            let vdesk_id_for_click = vdesk.id;
+            event_box.connect_button_press_event(move |_, event| {
+                if event.button() == 1 { // Left click
+                    let _ = std::process::Command::new("hyprctl")
+                        .args(&["dispatch", "vdesk", &vdesk_id_for_click.to_string()])
+                        .output();
+                }
+                false.into()
+            });
+
             // Apply CSS classes based on state
             let style_context = label.style_context();
             if vdesk.focused {
@@ -178,12 +212,12 @@ impl VirtualDesktopsModule {
             } else {
                 style_context.add_class("vdesk-unfocused");
             }
-            
+
             if !vdesk.populated && !self.config.show_empty {
                 style_context.add_class("hidden");
             }
-            
-            self.container.add(&label);
+
+            self.container.add(&event_box);
             self.labels.push(label);
         }
 
@@ -203,25 +237,41 @@ impl VirtualDesktopsModule {
 
 /// Background task to monitor virtual desktop changes
 async fn monitor_virtual_desktops(manager: Arc<Mutex<VirtualDesktopsManager>>) -> Result<()> {
+    eprintln!("Starting virtual desktop monitoring...");
+
     // Initial state update
     {
         let mut mgr = manager.lock().unwrap();
         if let Err(e) = mgr.initialize().await {
+            eprintln!("Failed to initialize virtual desktop manager: {}", e);
             log::error!("Failed to initialize virtual desktop manager: {}", e);
+            return Err(e);
         }
     }
 
     // Create a separate IPC connection for event monitoring
-    let mut ipc = HyprlandIPC::new().await?;
+    let mut ipc = match HyprlandIPC::new().await {
+        Ok(ipc) => {
+            eprintln!("Successfully connected to Hyprland IPC");
+            ipc
+        }
+        Err(e) => {
+            eprintln!("Failed to connect to Hyprland IPC: {}", e);
+            return Err(e);
+        }
+    };
 
     // Listen for events in a loop
     loop {
         match ipc.listen_for_events().await {
             Ok(event) => {
                 if event.starts_with("vdesk>>") {
+                    eprintln!("Received vdesk event: {}", event);
                     let mut mgr = manager.lock().unwrap();
                     if let Err(e) = mgr.update_state().await {
                         log::error!("Failed to update virtual desktop state: {}", e);
+                    } else {
+                        eprintln!("State updated successfully - Waybar will call update() when needed");
                     }
                 }
             }

@@ -72,9 +72,9 @@ impl HyprlandIPC {
     }
     
     pub async fn get_virtual_desktop_state(&self) -> Result<String> {
-        // Use hyprctl command to get virtual desktop state
+        // Use hyprctl command to get virtual desktop state in JSON format
         let output = Command::new("hyprctl")
-            .args(&["printstate"])
+            .args(&["printstate", "-j"])
             .output()?;
         
         if !output.status.success() {
