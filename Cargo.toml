@@ -31,6 +31,10 @@ env_logger = "0.10"
 # String handling
 once_cell = "1.19"
 
+[dev-dependencies]
+# For integration tests
+futures = "0.3"
+
 [build-dependencies]
 # For generating bindings if needed
 bindgen = "0.69"

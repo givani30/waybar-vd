@@ -1,17 +1,18 @@
 // src/lib.rs
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
 use anyhow::Result;
 use serde::Deserialize;
+use tokio::runtime::Handle;
 use waybar_cffi::{
-    gtk::{self, prelude::*, Label, Box as GtkBox, Orientation, EventBox},
+    gtk::{prelude::*, Label, Box as GtkBox, Orientation, EventBox},
     waybar_module, InitInfo, Module,
 };
 
-mod config;
-mod hyprland;
-mod vdesk;
+pub mod config;
+pub mod hyprland;
+pub mod vdesk;
 
 use config::ModuleConfig;
 use hyprland::HyprlandIPC;
@@ -65,12 +66,24 @@ fn default_sort_by() -> String {
     "number".to_string()
 }
 
+/// Widget state for a virtual desktop
+#[derive(Debug)]
+struct VirtualDesktopWidget {
+    event_box: EventBox,
+    label: Label,
+    vdesk_id: u32,
+    display_text: String,
+    tooltip_text: String,
+    focused: bool,
+}
+
 /// The main virtual desktops module
 pub struct VirtualDesktopsModule {
     container: GtkBox,
-    labels: Vec<Label>,
-    manager: Arc<Mutex<VirtualDesktopsManager>>,
+    widgets: Vec<VirtualDesktopWidget>,
+    manager: Arc<tokio::sync::Mutex<VirtualDesktopsManager>>,
     config: ModuleConfig,
+    runtime_handle: Handle,
 }
 
 impl Module for VirtualDesktopsModule {
@@ -100,55 +113,57 @@ impl Module for VirtualDesktopsModule {
         container.add(&hbox);
         log::debug!("Created GTK container widget");
 
-        // Initialize the virtual desktops manager
-        let manager = Arc::new(Mutex::new(VirtualDesktopsManager::new()));
+        // Create a single Tokio runtime for the entire module
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime");
+        let runtime_handle = rt.handle().clone();
+
+        // Initialize the virtual desktops manager with async Mutex
+        let manager = Arc::new(tokio::sync::Mutex::new(VirtualDesktopsManager::new()));
 
         // Initialize the manager synchronously to populate initial state
         {
             let manager_for_init = Arc::clone(&manager);
+            let handle = runtime_handle.clone();
             thread::spawn(move || {
-                match tokio::runtime::Runtime::new() {
-                    Ok(rt) => {
-                        rt.block_on(async {
-                            let mut mgr = manager_for_init.lock().unwrap();
-                            if let Err(e) = mgr.initialize().await {
-                                log::error!("Failed to initialize virtual desktop manager: {}", e);
-                            } else {
-                                log::debug!("Virtual desktop manager initialized successfully");
-                            }
-                        });
+                handle.block_on(async {
+                    match manager_for_init.lock().await.initialize().await {
+                        Ok(_) => log::debug!("Virtual desktop manager initialized successfully"),
+                        Err(e) => log::error!("Failed to initialize virtual desktop manager: {}", e),
                     }
-                    Err(e) => {
-                        log::error!("Failed to create tokio runtime for initialization: {}", e);
-                    }
-                }
+                });
             }).join().unwrap_or_else(|_| {
                 log::error!("Failed to join initialization thread");
             });
         }
 
-        // Start background thread for IPC monitoring
+        // Start background thread for IPC monitoring using the same runtime
         let manager_clone = Arc::clone(&manager);
+        let handle_clone = runtime_handle.clone();
         thread::spawn(move || {
-            match tokio::runtime::Runtime::new() {
-                Ok(rt) => {
-                    rt.block_on(async {
-                        if let Err(e) = monitor_virtual_desktops(manager_clone).await {
-                            log::error!("Virtual desktop monitoring failed: {}", e);
-                        }
-                    });
+            handle_clone.block_on(async {
+                if let Err(e) = monitor_virtual_desktops(manager_clone).await {
+                    log::error!("Virtual desktop monitoring failed: {}", e);
                 }
-                Err(e) => {
-                    log::error!("Failed to create tokio runtime: {}", e);
+            });
+        });
+
+        // Keep the runtime alive by moving it to a background thread
+        thread::spawn(move || {
+            rt.block_on(async {
+                // This will keep the runtime alive indefinitely
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
                 }
-            }
+            });
         });
 
         let mut module = Self {
             container: hbox,
-            labels: Vec::new(),
+            widgets: Vec::new(),
             manager,
             config: module_config,
+            runtime_handle,
         };
 
         // Initial update - now the manager should have data
@@ -178,81 +193,166 @@ impl Module for VirtualDesktopsModule {
 
 impl VirtualDesktopsModule {
     fn update_display(&mut self) {
-        // Clear existing labels and their containers
-        let children: Vec<gtk::Widget> = self.container.children();
-        for child in children {
-            self.container.remove(&child);
-        }
-        self.labels.clear();
+        // Get virtual desktops from manager using async Mutex
+        let manager = Arc::clone(&self.manager);
+        let handle = self.runtime_handle.clone();
+        let virtual_desktops = handle.block_on(async {
+            manager.lock().await.get_virtual_desktops()
+        });
 
-        // Get virtual desktops from manager
-        let manager = self.manager.lock().unwrap();
-        let virtual_desktops = manager.get_virtual_desktops();
+        // Filter virtual desktops that should be displayed
+        let visible_vdesks: Vec<_> = virtual_desktops.into_iter()
+            .filter(|vdesk| vdesk.populated || vdesk.focused || self.config.show_empty)
+            .collect();
 
-        // Create new labels for each virtual desktop
-        for vdesk in virtual_desktops {
-            if !vdesk.populated && !vdesk.focused && !self.config.show_empty {
-                continue;
+        // Perform incremental updates
+        self.update_widgets_incrementally(visible_vdesks);
+        self.container.show_all();
+    }
+
+    fn update_widgets_incrementally(&mut self, visible_vdesks: Vec<crate::vdesk::VirtualDesktop>) {
+        // Remove widgets for virtual desktops that are no longer visible
+        let mut i = 0;
+        while i < self.widgets.len() {
+            let widget_vdesk_id = self.widgets[i].vdesk_id;
+            if !visible_vdesks.iter().any(|vd| vd.id == widget_vdesk_id) {
+                let widget = self.widgets.remove(i);
+                self.container.remove(&widget.event_box);
+            } else {
+                i += 1;
             }
-            
-            // Format the virtual desktop display text using config
+        }
+
+        // Update or create widgets for visible virtual desktops
+        for (index, vdesk) in visible_vdesks.iter().enumerate() {
             let display_text = self.config.format_virtual_desktop(
-                &vdesk.name, 
-                vdesk.id, 
+                &vdesk.name,
+                vdesk.id,
                 vdesk.window_count
             );
-            
-            let label = Label::new(Some(&display_text));
 
-            // Set tooltip with detailed information
             let tooltip_text = self.config.format_tooltip(
                 &vdesk.name,
                 vdesk.id,
                 vdesk.window_count,
                 vdesk.focused
             );
-            label.set_tooltip_text(Some(&tooltip_text));
 
-            // Make the label clickable
-            let event_box = EventBox::new();
-            event_box.add(&label);
-
-            // Set up click handler
-            let vdesk_id_for_click = vdesk.id;
-            event_box.connect_button_press_event(move |_, event| {
-                if event.button() == 1 { // Left click
-                    let _ = std::process::Command::new("hyprctl")
-                        .args(&["dispatch", "vdesk", &vdesk_id_for_click.to_string()])
-                        .output();
+            // Check if we already have a widget for this virtual desktop
+            if let Some(existing_widget) = self.widgets.iter_mut().find(|w| w.vdesk_id == vdesk.id) {
+                // Update existing widget if content has changed
+                if existing_widget.display_text != display_text {
+                    existing_widget.label.set_text(&display_text);
+                    existing_widget.display_text = display_text;
                 }
-                false.into()
-            });
 
-            // Apply CSS classes based on state
-            let style_context = label.style_context();
-            if vdesk.focused {
-                style_context.add_class("vdesk-focused");
+                if existing_widget.tooltip_text != tooltip_text {
+                    existing_widget.label.set_tooltip_text(Some(&tooltip_text));
+                    existing_widget.tooltip_text = tooltip_text;
+                }
+
+                // Update CSS classes if focus state changed
+                if existing_widget.focused != vdesk.focused {
+                    let style_context = existing_widget.label.style_context();
+                    if vdesk.focused {
+                        style_context.remove_class("vdesk-unfocused");
+                        style_context.add_class("vdesk-focused");
+                    } else {
+                        style_context.remove_class("vdesk-focused");
+                        style_context.add_class("vdesk-unfocused");
+                    }
+                    existing_widget.focused = vdesk.focused;
+                }
             } else {
-                style_context.add_class("vdesk-unfocused");
-            }
+                // Create new widget for this virtual desktop
+                let widget = self.create_virtual_desktop_widget(vdesk, display_text, tooltip_text);
 
-            if !vdesk.populated && !self.config.show_empty {
-                style_context.add_class("hidden");
+                // Insert at the correct position to maintain order
+                if index < self.widgets.len() {
+                    self.widgets.insert(index, widget);
+                    self.container.reorder_child(&self.widgets[index].event_box, index as i32);
+                } else {
+                    self.container.add(&widget.event_box);
+                    self.widgets.push(widget);
+                }
             }
-
-            self.container.add(&event_box);
-            self.labels.push(label);
         }
 
-        self.container.show_all();
+        // Reorder widgets to match the virtual desktop order
+        for (index, vdesk) in visible_vdesks.iter().enumerate() {
+            if let Some(widget_index) = self.widgets.iter().position(|w| w.vdesk_id == vdesk.id) {
+                if widget_index != index {
+                    let widget = self.widgets.remove(widget_index);
+                    self.widgets.insert(index, widget);
+                    self.container.reorder_child(&self.widgets[index].event_box, index as i32);
+                }
+            }
+        }
+    }
+
+    fn create_virtual_desktop_widget(
+        &self,
+        vdesk: &crate::vdesk::VirtualDesktop,
+        display_text: String,
+        tooltip_text: String
+    ) -> VirtualDesktopWidget {
+        let label = Label::new(Some(&display_text));
+        label.set_tooltip_text(Some(&tooltip_text));
+
+        // Make the label clickable
+        let event_box = EventBox::new();
+        event_box.add(&label);
+
+        // Set up click handler using async IPC
+        let vdesk_id_for_click = vdesk.id;
+        let runtime_handle = self.runtime_handle.clone();
+        event_box.connect_button_press_event(move |_, event| {
+            if event.button() == 1 { // Left click
+                let handle = runtime_handle.clone();
+                let vdesk_id = vdesk_id_for_click;
+
+                // Spawn async task to handle the click
+                handle.spawn(async move {
+                    match HyprlandIPC::new().await {
+                        Ok(ipc) => {
+                            if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
+                                log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to create Hyprland IPC for click handler: {}", e);
+                        }
+                    }
+                });
+            }
+            false.into()
+        });
+
+        // Apply CSS classes based on state
+        let style_context = label.style_context();
+        if vdesk.focused {
+            style_context.add_class("vdesk-focused");
+        } else {
+            style_context.add_class("vdesk-unfocused");
+        }
+
+        if !vdesk.populated && !self.config.show_empty {
+            style_context.add_class("hidden");
+        }
+
+        VirtualDesktopWidget {
+            event_box,
+            label,
+            vdesk_id: vdesk.id,
+            display_text,
+            tooltip_text,
+            focused: vdesk.focused,
+        }
     }
     
     fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        // Use direct socket communication to switch to the virtual desktop
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| anyhow::anyhow!("Failed to create tokio runtime: {}", e))?;
-
-        rt.block_on(async {
+        // Use the shared runtime for async operations
+        self.runtime_handle.block_on(async {
             let ipc = HyprlandIPC::new().await
                 .map_err(|e| anyhow::anyhow!("Failed to create Hyprland IPC: {}", e))?;
 
@@ -263,7 +363,7 @@ impl VirtualDesktopsModule {
 }
 
 /// Background task to monitor virtual desktop changes
-async fn monitor_virtual_desktops(manager: Arc<Mutex<VirtualDesktopsManager>>) -> Result<()> {
+async fn monitor_virtual_desktops(manager: Arc<tokio::sync::Mutex<VirtualDesktopsManager>>) -> Result<()> {
     log::info!("Starting virtual desktop monitoring...");
 
     // Create IPC connection for event monitoring
@@ -284,7 +384,7 @@ async fn monitor_virtual_desktops(manager: Arc<Mutex<VirtualDesktopsManager>>) -
             Ok(event) => {
                 if event.starts_with("vdesk>>") {
                     log::debug!("Received vdesk event: {}", event);
-                    let mut mgr = manager.lock().unwrap();
+                    let mut mgr = manager.lock().await;
                     if let Err(e) = mgr.update_state().await {
                         log::error!("Failed to update virtual desktop state: {}", e);
                     } else {

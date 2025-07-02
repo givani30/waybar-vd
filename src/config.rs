@@ -67,3 +67,55 @@ impl ModuleConfig {
         tooltip
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_formatting() {
+        let mut format_icons = HashMap::new();
+        format_icons.insert("1".to_string(), "🏠".to_string());
+        format_icons.insert("Work".to_string(), "💼".to_string());
+
+        let config = ModuleConfig {
+            format: "{icon} {name} ({window_count})".to_string(),
+            show_empty: true,
+            separator: " | ".to_string(),
+            format_icons,
+            show_window_count: true,
+            sort_by: "number".to_string(),
+        };
+
+        // Test formatting with icon by ID
+        let result = config.format_virtual_desktop("Home", 1, 3);
+        assert_eq!(result, "🏠 Home (3)");
+
+        // Test formatting with icon by name
+        let result = config.format_virtual_desktop("Work", 2, 5);
+        assert_eq!(result, "💼 Work (5)");
+
+        // Test formatting without icon
+        let result = config.format_virtual_desktop("Other", 3, 0);
+        assert_eq!(result, " Other (0)");
+
+        // Test tooltip formatting
+        let tooltip = config.format_tooltip("Home", 1, 3, true);
+        assert_eq!(tooltip, "Virtual Desktop 1: Home (3 windows) - focused");
+
+        let tooltip = config.format_tooltip("Work", 2, 5, false);
+        assert_eq!(tooltip, "Virtual Desktop 2: Work (5 windows)");
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = ModuleConfig::default();
+
+        assert_eq!(config.format, "{name}");
+        assert!(!config.show_empty);
+        assert_eq!(config.separator, " ");
+        assert!(config.format_icons.is_empty());
+        assert!(!config.show_window_count);
+        assert_eq!(config.sort_by, "number");
+    }
+}
