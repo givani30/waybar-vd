@@ -71,14 +71,14 @@ pub async fn resilient_monitor_loop(
 /// Single monitoring cycle
 async fn monitor_virtual_desktops_once(
     manager: &Arc<Mutex<VirtualDesktopsManager>>,
-    config: &ModuleConfig
+    config: &ModuleConfig,
 ) -> Result<()> {
     log::debug!("Starting monitor cycle...");
 
     // Create IPC connection
     let mut ipc = HyprlandIPC::with_config(config.retry_max, config.retry_base_delay_ms).await
-        .map_err(|e| crate::errors::VirtualDesktopError::IpcConnection { 
-            source: std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e.to_string()) 
+        .map_err(|e| crate::errors::VirtualDesktopError::IpcConnection {
+            source: std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e.to_string())
         })?;
 
     log::debug!("Successfully connected to Hyprland IPC for monitoring");

@@ -15,12 +15,14 @@ use waybar_cffi::{
 pub mod config;
 pub mod errors;
 pub mod hyprland;
+pub mod metrics;
 pub mod monitor;
 pub mod ui;
 pub mod vdesk;
 
 use config::ModuleConfig;
 use hyprland::HyprlandIPC;
+use metrics::PerformanceMetrics;
 use ui::WidgetManager;
 use vdesk::VirtualDesktopsManager;
 
@@ -99,6 +101,7 @@ pub struct VirtualDesktopsModule {
     _runtime: Arc<tokio::runtime::Runtime>,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     monitor_handle: Option<tokio::task::JoinHandle<()>>,
+    metrics: Arc<PerformanceMetrics>,
 }
 
 impl Module for VirtualDesktopsModule {
@@ -107,6 +110,9 @@ impl Module for VirtualDesktopsModule {
     fn init(info: &InitInfo, config: Self::Config) -> Self {
         let _ = env_logger::try_init();
         log::info!("Virtual Desktops CFFI module initializing...");
+
+        let init_start = std::time::Instant::now();
+        let metrics = Arc::new(PerformanceMetrics::new());
 
         // Convert string sort_by to enum
         let sort_by = config.sort_by.parse()
@@ -157,7 +163,7 @@ impl Module for VirtualDesktopsModule {
         }
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let widget_manager = WidgetManager::new(hbox, module_config.clone(), runtime_handle.clone());
+        let widget_manager = WidgetManager::new(hbox, module_config.clone(), runtime_handle.clone(), Arc::clone(&metrics));
         let manager_clone = Arc::clone(&manager);
         let config_clone = module_config.clone();
         let monitor_handle = runtime_handle.spawn(async move {
@@ -173,11 +179,17 @@ impl Module for VirtualDesktopsModule {
             _runtime: rt,
             shutdown_tx: Some(shutdown_tx),
             monitor_handle: Some(monitor_handle),
+            metrics: Arc::clone(&metrics),
         };
 
         log::debug!("Performing initial update");
         module.update();
-        log::info!("Virtual Desktops CFFI module initialized successfully");
+
+        // Record startup completion
+        let startup_duration = init_start.elapsed();
+
+        log::info!("Virtual Desktops CFFI module initialized successfully in {:.2}ms",
+                  startup_duration.as_millis());
         module
     }
 
@@ -224,12 +236,18 @@ impl Drop for VirtualDesktopsModule {
             });
         }
 
+        // Log final metrics summary before shutdown
+        log::info!("Final performance metrics:");
+        self.log_metrics_summary();
+
         log::info!("VirtualDesktopsModule shutdown complete");
     }
 }
 
 impl VirtualDesktopsModule {
     fn update_display(&mut self) {
+        let _timer = self.metrics.start_widget_update_timer(Arc::clone(&self.metrics));
+
         let manager = Arc::clone(&self.manager);
         let handle = self.runtime_handle.clone();
         let virtual_desktops = handle.block_on(async {
@@ -242,8 +260,26 @@ impl VirtualDesktopsModule {
 
         if let Err(e) = self.widget_manager.update_widgets(&visible_vdesks) {
             log::error!("Failed to update widgets: {}", e);
+            self.metrics.record_ipc_error();
         }
         self.widget_manager.refresh_display();
+    }
+
+    /// Get current performance metrics snapshot
+    pub fn get_metrics(&self) -> crate::metrics::MetricsSnapshot {
+        self.metrics.snapshot()
+    }
+
+    /// Log performance metrics summary
+    pub fn log_metrics_summary(&self) {
+        self.metrics.log_summary();
+    }
+
+    /// Force a metrics log (for testing/debugging)
+    pub fn force_metrics_log(&self) {
+        log::info!("=== PERFORMANCE METRICS REPORT ===");
+        self.metrics.log_summary();
+        log::info!("=== END METRICS REPORT ===");
     }
 
     fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
