@@ -264,12 +264,23 @@ cargo test
 
 ### Testing
 
-Use the provided test script to verify the module works:
+Use the self-contained test system in the repository:
 
 ```bash
-# Run the test configuration
-/home/givanib/dotfiles/config/waybar/test-cffi.sh --run
+# Check prerequisites
+./test/test.sh --check
+
+# Validate configuration 
+./test/test.sh --dry-run
+
+# Run full test (starts separate waybar instance)
+./test/test.sh --run
+
+# Build library only
+./test/test.sh --build
 ```
+
+The test system is **completely safe** - it runs a separate waybar instance that won't interfere with your main setup.
 
 ## License
 
