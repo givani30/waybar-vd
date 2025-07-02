@@ -1,3 +1,4 @@
+// src/vdesk.rs
 use crate::hyprland::HyprlandIPC;
 use anyhow::Result;
 use std::collections::HashMap;

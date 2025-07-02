@@ -1,3 +1,4 @@
+// src/lib.rs
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -102,6 +103,30 @@ impl Module for VirtualDesktopsModule {
         // Initialize the virtual desktops manager
         let manager = Arc::new(Mutex::new(VirtualDesktopsManager::new()));
 
+        // Initialize the manager synchronously to populate initial state
+        {
+            let manager_for_init = Arc::clone(&manager);
+            thread::spawn(move || {
+                match tokio::runtime::Runtime::new() {
+                    Ok(rt) => {
+                        rt.block_on(async {
+                            let mut mgr = manager_for_init.lock().unwrap();
+                            if let Err(e) = mgr.initialize().await {
+                                log::error!("Failed to initialize virtual desktop manager: {}", e);
+                            } else {
+                                log::debug!("Virtual desktop manager initialized successfully");
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create tokio runtime for initialization: {}", e);
+                    }
+                }
+            }).join().unwrap_or_else(|_| {
+                log::error!("Failed to join initialization thread");
+            });
+        }
+
         // Start background thread for IPC monitoring
         let manager_clone = Arc::clone(&manager);
         thread::spawn(move || {
@@ -109,13 +134,11 @@ impl Module for VirtualDesktopsModule {
                 Ok(rt) => {
                     rt.block_on(async {
                         if let Err(e) = monitor_virtual_desktops(manager_clone).await {
-                            eprintln!("Virtual desktop monitoring failed: {}", e);
                             log::error!("Virtual desktop monitoring failed: {}", e);
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("Failed to create tokio runtime: {}", e);
                     log::error!("Failed to create tokio runtime: {}", e);
                 }
             }
@@ -128,7 +151,7 @@ impl Module for VirtualDesktopsModule {
             config: module_config,
         };
 
-        // Initial update
+        // Initial update - now the manager should have data
         log::debug!("Performing initial update");
         module.update();
 
@@ -225,38 +248,32 @@ impl VirtualDesktopsModule {
     }
     
     fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        // Use hyprctl to switch to the virtual desktop
-        std::process::Command::new("hyprctl")
-            .args(&["dispatch", "vdesk", &vdesk_id.to_string()])
-            .output()
-            .map_err(|e| anyhow::anyhow!("Failed to switch virtual desktop: {}", e))?;
-        
-        Ok(())
+        // Use direct socket communication to switch to the virtual desktop
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| anyhow::anyhow!("Failed to create tokio runtime: {}", e))?;
+
+        rt.block_on(async {
+            let ipc = HyprlandIPC::new().await
+                .map_err(|e| anyhow::anyhow!("Failed to create Hyprland IPC: {}", e))?;
+
+            ipc.switch_to_virtual_desktop(vdesk_id).await
+                .map_err(|e| anyhow::anyhow!("Failed to switch virtual desktop: {}", e))
+        })
     }
 }
 
 /// Background task to monitor virtual desktop changes
 async fn monitor_virtual_desktops(manager: Arc<Mutex<VirtualDesktopsManager>>) -> Result<()> {
-    eprintln!("Starting virtual desktop monitoring...");
+    log::info!("Starting virtual desktop monitoring...");
 
-    // Initial state update
-    {
-        let mut mgr = manager.lock().unwrap();
-        if let Err(e) = mgr.initialize().await {
-            eprintln!("Failed to initialize virtual desktop manager: {}", e);
-            log::error!("Failed to initialize virtual desktop manager: {}", e);
-            return Err(e);
-        }
-    }
-
-    // Create a separate IPC connection for event monitoring
+    // Create IPC connection for event monitoring
     let mut ipc = match HyprlandIPC::new().await {
         Ok(ipc) => {
-            eprintln!("Successfully connected to Hyprland IPC");
+            log::info!("Successfully connected to Hyprland IPC for monitoring");
             ipc
         }
         Err(e) => {
-            eprintln!("Failed to connect to Hyprland IPC: {}", e);
+            log::error!("Failed to connect to Hyprland IPC: {}", e);
             return Err(e);
         }
     };
@@ -266,12 +283,12 @@ async fn monitor_virtual_desktops(manager: Arc<Mutex<VirtualDesktopsManager>>) -
         match ipc.listen_for_events().await {
             Ok(event) => {
                 if event.starts_with("vdesk>>") {
-                    eprintln!("Received vdesk event: {}", event);
+                    log::debug!("Received vdesk event: {}", event);
                     let mut mgr = manager.lock().unwrap();
                     if let Err(e) = mgr.update_state().await {
                         log::error!("Failed to update virtual desktop state: {}", e);
                     } else {
-                        eprintln!("State updated successfully - Waybar will call update() when needed");
+                        log::debug!("Virtual desktop state updated successfully");
                     }
                 }
             }

@@ -1,7 +1,7 @@
+// src/hyprland.rs
 use anyhow::{anyhow, Result};
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::UnixStream;
 
@@ -72,59 +72,37 @@ impl HyprlandIPC {
     }
     
     pub async fn get_virtual_desktop_state(&self) -> Result<String> {
-        // Use hyprctl command to get virtual desktop state in JSON format
-        let output = Command::new("hyprctl")
-            .args(&["printstate", "-j"])
-            .output()?;
-        
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("hyprctl printstate failed: {}", stderr));
-        }
-        
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        // Send command directly to Hyprland socket for JSON format
+        self.send_command("j/printstate").await
     }
     
     pub async fn get_virtual_desktop_info(&self, vdesk_id: u32) -> Result<String> {
-        // Use hyprctl command to get specific virtual desktop info
-        let output = Command::new("hyprctl")
-            .args(&["printdesk", &vdesk_id.to_string()])
-            .output()?;
-        
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("hyprctl printdesk {} failed: {}", vdesk_id, stderr));
-        }
-        
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        // Send command directly to Hyprland socket
+        let command = format!("printdesk {}", vdesk_id);
+        self.send_command(&command).await
     }
     
     pub async fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        let output = Command::new("hyprctl")
-            .args(&["dispatch", "vdesk", &vdesk_id.to_string()])
-            .output()?;
-        
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("hyprctl dispatch vdesk {} failed: {}", vdesk_id, stderr));
-        }
-        
+        // Send dispatch command directly to Hyprland socket
+        let command = format!("dispatch vdesk {}", vdesk_id);
+        self.send_command(&command).await?;
         Ok(())
     }
     
     /// Send a raw command to Hyprland via the command socket
     pub async fn send_command(&self, command: &str) -> Result<String> {
+        use tokio::io::{AsyncWriteExt, AsyncReadExt};
+
         let mut stream = UnixStream::connect(&self.socket_path).await?;
-        
-        use tokio::io::AsyncWriteExt;
+
+        // Write the command to the socket
         stream.write_all(command.as_bytes()).await?;
-        stream.shutdown().await?;
-        
-        let mut response = String::new();
-        use tokio::io::AsyncReadExt;
-        stream.read_to_string(&mut response).await?;
-        
-        Ok(response)
+
+        // Read the response
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await?;
+
+        Ok(String::from_utf8_lossy(&response).to_string())
     }
 }
 
