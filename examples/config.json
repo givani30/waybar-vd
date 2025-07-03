@@ -1,0 +1,21 @@
+{
+    "layer": "top",
+    "position": "top",
+    "modules-center": ["cffi/virtual-desktops"],
+    
+    "cffi/virtual-desktops": {
+        "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+        "format": "{name}",
+        "show_empty": false,
+        "separator": " ",
+        "format_icons": {
+            "1": "1",
+            "2": "2", 
+            "3": "3",
+            "4": "4",
+            "5": "5"
+        },
+        "show_window_count": true,
+        "sort_by": "number"
+    }
+}

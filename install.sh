@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_NAME="waybar-virtual-desktops-cffi"
 LIB_NAME="libwaybar_virtual_desktops_cffi.so"
-INSTALL_DIR="$HOME/.local/lib/waybar-modules"
+INSTALL_DIR="$HOME/.config/waybar/modules"
 CONFIG_DIR="$HOME/.config/waybar"
 
 # Functions
@@ -232,7 +232,7 @@ main() {
     print_info "This script will install the Waybar Virtual Desktops CFFI Module"
     print_info "The installation includes:"
     print_info "- Building the Rust CFFI library"
-    print_info "- Installing to ~/.local/lib/waybar-modules/"
+    print_info "- Installing to ~/.config/waybar/modules/"
     print_info "- Creating example configurations"
     echo
     

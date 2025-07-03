@@ -1,0 +1,52 @@
+/* Virtual Desktop CFFI Module - Simple Example */
+
+/* Virtual Desktop Module Container */
+#cffi-virtual_desktops {
+    padding: 0px 5px;
+}
+
+/* Reset button defaults for clean styling */
+#cffi-virtual_desktops button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 2px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    color: rgba(205, 189, 255, 0.4);
+    font-weight: normal;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    font-size: inherit;
+    font-family: inherit;
+}
+
+/* Focused Virtual Desktop */
+#cffi-virtual_desktops button.vdesk-focused {
+    color: #cdbdff;
+    font-weight: bold;
+    background-color: rgba(205, 189, 255, 0.1);
+}
+
+/* Unfocused Virtual Desktop */
+#cffi-virtual_desktops button.vdesk-unfocused {
+    color: rgba(205, 189, 255, 0.3);
+    font-weight: normal;
+}
+
+/* Manual Hover Effects */
+#cffi-virtual_desktops button.hover.vdesk-focused {
+    background-color: rgba(205, 189, 255, 0.25);
+    color: #cdbdff;
+}
+
+#cffi-virtual_desktops button.hover.vdesk-unfocused {
+    background-color: rgba(205, 189, 255, 0.12);
+    color: rgba(205, 189, 255, 0.7);
+}
+
+/* Hidden Virtual Desktops */
+#cffi-virtual_desktops button.hidden {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+}

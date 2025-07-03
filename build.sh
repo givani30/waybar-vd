@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_NAME="waybar-virtual-desktops-cffi"
 LIB_NAME="libwaybar_virtual_desktops_cffi.so"
-INSTALL_DIR="$HOME/.local/lib/waybar-modules"
+INSTALL_DIR="$HOME/.config/waybar/modules"
 CONFIG_DIR="$HOME/.config/waybar"
 
 # Functions
@@ -107,67 +107,20 @@ create_example_config() {
     EXAMPLE_DIR="$CONFIG_DIR/examples/virtual-desktops-cffi"
     mkdir -p "$EXAMPLE_DIR"
     
-    # Create example config file
-    cat > "$EXAMPLE_DIR/config.json" << 'EOF'
-{
-    "layer": "top",
-    "position": "top",
-    "modules-center": ["cffi/virtual-desktops"],
+    # Copy example files from project examples directory
+    if [ -f "./examples/config.json" ]; then
+        cp "./examples/config.json" "$EXAMPLE_DIR/"
+        print_success "Example config copied to $EXAMPLE_DIR"
+    else
+        print_error "Example config.json not found in ./examples/"
+    fi
     
-    "cffi/virtual-desktops": {
-        "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
-        "format": "{name}",
-        "show_empty": false,
-        "separator": " ",
-        "format_icons": {
-            "1": "1",
-            "2": "2", 
-            "3": "3",
-            "4": "4",
-            "5": "5"
-        },
-        "show_window_count": true,
-        "sort_by": "number"
-    }
-}
-EOF
-    
-    # Create example CSS file
-    cat > "$EXAMPLE_DIR/style.css" << 'EOF'
-/* Virtual Desktop CFFI Module Styles */
-#cffi-virtual-desktops {
-    background-color: transparent;
-    padding: 0 10px;
-}
-
-#cffi-virtual-desktops .vdesk-focused {
-    background-color: #5e81ac;
-    color: #eceff4;
-    border-radius: 3px;
-    padding: 2px 6px;
-    margin: 0 2px;
-    font-weight: bold;
-}
-
-#cffi-virtual-desktops .vdesk-unfocused {
-    background-color: #4c566a;
-    color: #d8dee9;
-    border-radius: 3px;
-    padding: 2px 6px;
-    margin: 0 2px;
-}
-
-#cffi-virtual-desktops .vdesk-unfocused:hover {
-    background-color: #5e81ac;
-    color: #eceff4;
-}
-
-#cffi-virtual-desktops .hidden {
-    display: none;
-}
-EOF
-    
-    print_success "Example configuration created in $EXAMPLE_DIR"
+    if [ -f "./examples/style.css" ]; then
+        cp "./examples/style.css" "$EXAMPLE_DIR/"
+        print_success "Example CSS copied to $EXAMPLE_DIR"
+    else
+        print_error "Example style.css not found in ./examples/"
+    fi
 }
 
 show_usage() {

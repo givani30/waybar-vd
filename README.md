@@ -1,6 +1,6 @@
 # Waybar Virtual Desktops CFFI Module
 
-A high-performance CFFI module for Waybar that displays Hyprland virtual desktops with real-time updates and click handling.
+A high-performance CFFI module for [Waybar](https://github.com/Alexays/Waybar) that displays [Hyprland virtual desktops](https://github.com/levnikmyskin/hyprland-virtual-desktops) with real-time updates and click handling.
 
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -23,22 +23,60 @@ A high-performance CFFI module for Waybar that displays Hyprland virtual desktop
 
 ### Hyprland Virtual Desktop Plugin
 
-This module requires the Hyprland virtual desktop plugin. Make sure you have:
+This module requires the [Hyprland Virtual Desktop Plugin](https://github.com/levnikmyskin/hyprland-virtual-desktops). Make sure you have:
 
-1. The virtual desktop plugin loaded in your Hyprland configuration
+1. The virtual desktop plugin installed and loaded in your Hyprland configuration
 2. The `hyprctl` command available
 3. Virtual desktop commands working: `hyprctl dispatch vdesk 1`
 
+**Installation of the plugin:**
+```bash
+# Install via hyprpm (recommended)
+hyprpm add https://github.com/levnikmyskin/hyprland-virtual-desktops
+hyprpm enable virtual-desktops
+
+# Or follow the manual installation guide in the plugin repository
+```
+
+## Project Structure
+
+```
+waybar-virtual-desktops-cffi/
+├── examples/                  # Example configuration files
+│   ├── config.json           # Example Waybar configuration
+│   └── style.css             # Example CSS styling
+├── src/                      # Rust source code
+│   ├── ui/                   # UI components
+│   ├── config.rs             # Configuration handling
+│   ├── hyprland.rs           # Hyprland IPC client
+│   ├── lib.rs                # Main CFFI module
+│   └── ...
+├── test/                     # Test configuration and scripts
+│   ├── test.sh               # Test suite runner
+│   ├── waybar-config.json    # Test configuration
+│   └── style.css             # Test styling
+├── build.sh                  # Build script
+├── install.sh                # Interactive installation script
+└── Cargo.toml                # Rust project configuration
+```
+
 ## Installation
 
-### Quick Install
+### Quick Install (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/givanib/waybar-virtual-desktops-cffi.git
 cd waybar-virtual-desktops-cffi
 
-# Build and install
+# Interactive installation with examples
+./install.sh
+```
+
+### Build Only
+
+```bash
+# Build and install library only
 ./build.sh
 ```
 
@@ -49,8 +87,12 @@ cd waybar-virtual-desktops-cffi
 cargo build --release
 
 # Install to waybar modules directory
-mkdir -p ~/.local/lib/waybar-modules
-cp target/release/libwaybar_virtual_desktops_cffi.so ~/.local/lib/waybar-modules/
+mkdir -p ~/.config/waybar/modules
+cp target/release/libwaybar_virtual_desktops_cffi.so ~/.config/waybar/modules/
+
+# Copy example configurations
+mkdir -p ~/.config/waybar/examples/virtual-desktops-cffi
+cp examples/* ~/.config/waybar/examples/virtual-desktops-cffi/
 ```
 
 ## Configuration
@@ -64,7 +106,7 @@ Add the module to your Waybar configuration:
     "modules-center": ["cffi/virtual-desktops"],
     
     "cffi/virtual-desktops": {
-        "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
+        "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
         "format": "{name}",
         "show_empty": false
     }
@@ -96,10 +138,12 @@ The `format` string supports these variables:
 
 ### Example Configurations
 
+After installation, example configurations are available in `~/.config/waybar/examples/virtual-desktops-cffi/` or in the project's `examples/` directory.
+
 #### Simple Text Display
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
+    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{name}",
     "show_empty": false
 }
@@ -108,7 +152,7 @@ The `format` string supports these variables:
 #### With Icons
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
+    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{icon} {name}",
     "format_icons": {
         "1": "󰲠",
@@ -122,20 +166,10 @@ The `format` string supports these variables:
 }
 ```
 
-#### With Custom Retry Configuration
-```json
-"cffi/virtual-desktops": {
-    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
-    "format": "{name}",
-    "retry_max": 5,
-    "retry_base_delay_ms": 1000
-}
-```
-
 #### Advanced Configuration
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.local/lib/waybar-modules/libwaybar_virtual_desktops_cffi.so",
+    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{icon} {name} ({window_count})",
     "format_icons": {
         "work": "💼",
@@ -149,9 +183,11 @@ The `format` string supports these variables:
 }
 ```
 
+> **💡 Tip**: Check the `examples/` directory for complete configuration examples including both JSON config and CSS styling.
+
 ## CSS Styling
 
-The module uses GTK Button widgets and applies CSS classes for comprehensive styling support.
+The module uses GTK Button widgets and applies CSS classes for comprehensive styling support. Complete styling examples are available in the `examples/style.css` file.
 
 ### Modern Styling Example
 
@@ -356,4 +392,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - [Waybar](https://github.com/Alexays/Waybar) - The fantastic status bar this module extends
 - [Hyprland](https://hyprland.org/) - The dynamic tiling Wayland compositor
+- [Hyprland Virtual Desktops Plugin](https://github.com/levnikmyskin/hyprland-virtual-desktops) - The essential plugin that enables virtual desktop functionality
 - [waybar-cffi](https://crates.io/crates/waybar-cffi) - The CFFI interface enabling native modules
