@@ -1,4 +1,4 @@
-//! Waybar Virtual Desktops CFFI module for Hyprland integration
+//! waybar-vd: Waybar virtual desktops module for Hyprland integration
 
 // src/lib.rs
 use std::sync::Arc;
@@ -109,7 +109,7 @@ impl Module for VirtualDesktopsModule {
 
     fn init(info: &InitInfo, config: Self::Config) -> Self {
         let _ = env_logger::try_init();
-        log::info!("Virtual Desktops CFFI module initializing...");
+        log::info!("waybar-vd module initializing...");
 
         let init_start = std::time::Instant::now();
         let metrics = Arc::new(PerformanceMetrics::new());
@@ -142,10 +142,10 @@ impl Module for VirtualDesktopsModule {
         let hbox = GtkBox::new(Orientation::Horizontal, 0);
 
         // Set CSS name for styling
-        hbox.set_widget_name("cffi-virtual_desktops");
+        hbox.set_widget_name("waybar-vd");
 
         container.add(&hbox);
-        log::debug!("Created GTK container widget with CSS name 'cffi-virtual_desktops'");
+        log::debug!("Created GTK container widget with CSS name 'waybar-vd'");
 
         let rt = Arc::new(tokio::runtime::Runtime::new()
             .expect("Failed to create Tokio runtime"));
@@ -192,7 +192,7 @@ impl Module for VirtualDesktopsModule {
         // Record startup completion
         let startup_duration = init_start.elapsed();
 
-        log::info!("Virtual Desktops CFFI module initialized successfully in {:.2}ms",
+        log::info!("waybar-vd module initialized successfully in {:.2}ms",
                   startup_duration.as_millis());
         module
     }

@@ -41,7 +41,7 @@ impl VirtualDesktopWidget {
         // Enable hover event detection
         button.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
         
-        // Manual hover state management since CSS :hover doesn't work in CFFI modules
+        // Manual hover state management since CSS :hover doesn't work in waybar modules
         button.connect_enter_notify_event(|widget, _event| {
             log::debug!("Button hover ENTER detected");
             let style_context = widget.style_context();

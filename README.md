@@ -1,4 +1,4 @@
-# Waybar Virtual Desktops CFFI Module
+# waybar-vd
 
 A high-performance CFFI module for [Waybar](https://github.com/Alexays/Waybar) that displays [Hyprland virtual desktops](https://github.com/levnikmyskin/hyprland-virtual-desktops) with real-time updates and click handling.
 
@@ -41,7 +41,7 @@ hyprpm enable virtual-desktops
 ## Project Structure
 
 ```
-waybar-virtual-desktops-cffi/
+waybar-vd/
 ├── examples/                  # Example configuration files
 │   ├── config.json           # Example Waybar configuration
 │   └── style.css             # Example CSS styling
@@ -71,20 +71,20 @@ Download the latest release from GitHub:
 mkdir -p ~/.config/waybar/modules
 
 # Download the latest release
-wget -O ~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so \
-  https://github.com/givani30/waybar-virtual-desktops-cffi/releases/latest/download/libwaybar_virtual_desktops_cffi.so
+wget -O ~/.config/waybar/modules/libwaybar_vd.so \
+  https://github.com/givani30/waybar-vd/releases/latest/download/libwaybar_vd.so
 
 # Or using curl
-curl -L -o ~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so \
-  https://github.com/givani30/waybar-virtual-desktops-cffi/releases/latest/download/libwaybar_virtual_desktops_cffi.so
+curl -L -o ~/.config/waybar/modules/libwaybar_vd.so \
+  https://github.com/givani30/waybar-vd/releases/latest/download/libwaybar_vd.so
 ```
 
 ### Quick Install from Source (Alternative)
 
 ```bash
 # Clone the repository
-git clone https://github.com/givanib/waybar-virtual-desktops-cffi.git
-cd waybar-virtual-desktops-cffi
+git clone https://github.com/givani30/waybar-vd.git
+cd waybar-vd
 
 # Interactive installation with examples
 ./install.sh
@@ -105,7 +105,7 @@ cargo build --release
 
 # Install to waybar modules directory
 mkdir -p ~/.config/waybar/modules
-cp target/release/libwaybar_virtual_desktops_cffi.so ~/.config/waybar/modules/
+cp target/release/libwaybar_vd.so ~/.config/waybar/modules/
 
 # Copy example configurations
 mkdir -p ~/.config/waybar/examples/virtual-desktops-cffi
@@ -123,7 +123,7 @@ Add the module to your Waybar configuration:
     "modules-center": ["cffi/virtual-desktops"],
     
     "cffi/virtual-desktops": {
-        "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+        "module_path": "~/.config/waybar/modules/libwaybar_vd.so",
         "format": "{name}",
         "show_empty": false
     }
@@ -160,7 +160,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### Simple Text Display
 ```json
 "cffi/virtual-desktops": {
-    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_vd.so",
     "format": "{name}",
     "show_empty": false
 }
@@ -169,7 +169,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### With Icons
 ```json
 "cffi/virtual-desktops": {
-    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_vd.so",
     "format": "{icon} {name}",
     "format_icons": {
         "1": "󰲠",
@@ -186,7 +186,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### Advanced Configuration
 ```json
 "cffi/virtual-desktops": {
-    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_vd.so",
     "format": "{icon} {name} ({window_count})",
     "format_icons": {
         "work": "💼",
@@ -327,8 +327,8 @@ The module includes smooth 150ms fade-in/fade-out animations for desktop creatio
 
 ```bash
 # Clone the repository
-git clone https://github.com/givanib/waybar-virtual-desktops-cffi.git
-cd waybar-virtual-desktops-cffi
+git clone https://github.com/givani30/waybar-vd.git
+cd waybar-vd
 
 # Build in debug mode
 cargo build

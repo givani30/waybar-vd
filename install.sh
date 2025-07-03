@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Installation script for Waybar Virtual Desktops CFFI Module
+# Installation script for waybar-vd
 # This script provides an interactive installation experience
 
 set -e
@@ -14,8 +14,8 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_NAME="waybar-virtual-desktops-cffi"
-LIB_NAME="libwaybar_virtual_desktops_cffi.so"
+PROJECT_NAME="waybar-vd"
+LIB_NAME="libwaybar_vd.so"
 INSTALL_DIR="$HOME/.config/waybar/modules"
 CONFIG_DIR="$HOME/.config/waybar"
 
@@ -24,7 +24,7 @@ print_header() {
     clear
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║                                                              ║${NC}"
-    echo -e "${CYAN}║           Waybar Virtual Desktops CFFI Module                ║${NC}"
+    echo -e "${CYAN}║                      waybar-vd                               ║${NC}"
     echo -e "${CYAN}║                    Installation Script                       ║${NC}"
     echo -e "${CYAN}║                                                              ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -132,7 +132,7 @@ backup_existing_config() {
 }
 
 build_and_install() {
-    print_step "Building and installing the CFFI module..."
+    print_step "Building and installing the module..."
     
     # Use the build script
     if [ -f "./build.sh" ]; then
@@ -147,7 +147,7 @@ setup_configuration() {
     print_step "Setting up configuration..."
     
     if ask_yes_no "Would you like to create an example configuration?"; then
-        local example_dir="$CONFIG_DIR/examples/virtual-desktops-cffi"
+        local example_dir="$CONFIG_DIR/examples/waybar-vd"
         mkdir -p "$example_dir"
         
         # Check if example files were created by build.sh
@@ -219,8 +219,8 @@ show_next_steps() {
     echo
     print_info "Library installed at: $INSTALL_DIR/$LIB_NAME"
     
-    if [ -d "$CONFIG_DIR/examples/virtual-desktops-cffi" ]; then
-        print_info "Example config at: $CONFIG_DIR/examples/virtual-desktops-cffi"
+    if [ -d "$CONFIG_DIR/examples/waybar-vd" ]; then
+        print_info "Example config at: $CONFIG_DIR/examples/waybar-vd"
     fi
 }
 
@@ -228,9 +228,9 @@ show_next_steps() {
 main() {
     print_header
     
-    print_info "This script will install the Waybar Virtual Desktops CFFI Module"
+    print_info "This script will install the waybar-vd module"
     print_info "The installation includes:"
-    print_info "- Building the Rust CFFI library"
+    print_info "- Building the Rust library"
     print_info "- Installing to ~/.config/waybar/modules/"
     print_info "- Creating example configurations"
     echo
@@ -262,7 +262,7 @@ main() {
 # Handle script arguments
 case "${1:-}" in
     --help)
-        echo "Waybar Virtual Desktops CFFI Module Installer"
+        echo "waybar-vd Module Installer"
         echo
         echo "Usage: $0 [OPTIONS]"
         echo

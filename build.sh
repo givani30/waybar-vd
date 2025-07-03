@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Build script for Waybar Virtual Desktops CFFI Module
-# This script builds the CFFI shared library for Waybar
+# Build script for waybar-vd
+# This script builds the shared library for Waybar
 
 set -e
 
@@ -13,15 +13,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_NAME="waybar-virtual-desktops-cffi"
-LIB_NAME="libwaybar_virtual_desktops_cffi.so"
+PROJECT_NAME="waybar-vd"
+LIB_NAME="libwaybar_vd.so"
 INSTALL_DIR="$HOME/.config/waybar/modules"
 CONFIG_DIR="$HOME/.config/waybar"
 
 # Functions
 print_header() {
     echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE}  Waybar Virtual Desktops CFFI  ${NC}"
+    echo -e "${BLUE}         waybar-vd               ${NC}"
     echo -e "${BLUE}================================${NC}"
     echo
 }
@@ -67,7 +67,7 @@ check_prerequisites() {
 }
 
 build_library() {
-    print_step "Building CFFI shared library..."
+    print_step "Building shared library..."
     
     # Clean previous builds
     cargo clean
@@ -75,7 +75,7 @@ build_library() {
     # Build in release mode
     cargo build --release
     # Strip debug symbols
-    strip target/release/libwaybar_virtual_desktops_cffi.so
+    strip target/release/libwaybar_vd.so
     if [ $? -eq 0 ]; then
         print_success "Library built successfully"
     else
@@ -105,7 +105,7 @@ create_example_config() {
     print_step "Creating example configuration..."
     
     # Create example config directory
-    EXAMPLE_DIR="$CONFIG_DIR/examples/virtual-desktops-cffi"
+    EXAMPLE_DIR="$CONFIG_DIR/examples/waybar-vd"
     mkdir -p "$EXAMPLE_DIR"
     
     # Copy example files from project examples directory

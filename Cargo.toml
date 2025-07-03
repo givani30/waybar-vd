@@ -1,5 +1,5 @@
 [package]
-name = "waybar-virtual-desktops-cffi"
+name = "waybar-vd"
 version = "0.1.0"
 edition = "2021"
 authors = ["Givani Boekestijn <givaniboek@hotmail.com>"]
