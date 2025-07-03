@@ -37,7 +37,7 @@ A high-performance CFFI module for [Waybar](https://github.com/Alexays/Waybar) t
 
 - **Hyprland** with virtual desktop plugin installed
 - **Waybar** with CFFI support (version 0.12.0+)
-- **Rust** toolchain (for building)
+- **Rust** toolchain (only if building from source)
 
 ### Hyprland Virtual Desktop Plugin
 
