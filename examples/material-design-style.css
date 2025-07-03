@@ -1,0 +1,84 @@
+/* Material Design Theme for waybar-vd
+ * Modern, polished styling with Material Design principles
+ * Supports Matugen color generation - replace colors.css with your generated theme
+ * 
+ * To use with Matugen:
+ * 1. Generate colors with: matugen image path/to/wallpaper.jpg -t scheme-content
+ * 2. Replace @import "colors.css" with your generated color file
+ * 3. Customize the @primary, @outline, and @on_surface_variant variables as needed
+ */
+
+@import "colors.css";
+
+/* Virtual Desktop Module Container */
+#cffi-virtual_desktops {
+    padding: 0px 5px;
+}
+
+/* Reset button defaults for clean styling */
+#cffi-virtual_desktops button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 2px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    color: rgba(205, 189, 255, 0.4);
+    font-weight: normal;
+    /* Smooth transitions for all interactions */
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    font-size: inherit;
+    font-family: inherit;
+}
+
+/* Focused Virtual Desktop */
+#cffi-virtual_desktops button.vdesk-focused {
+    color: @primary;
+    font-weight: bold;
+}
+
+/* Unfocused Virtual Desktop */
+#cffi-virtual_desktops button.vdesk-unfocused {
+    color: @outline;
+    font-weight: normal;
+}
+
+/* Manual Hover Effects (CSS :hover doesn't work in CFFI modules) */
+#cffi-virtual_desktops button.hover.vdesk-focused {
+    color: @primary;
+}
+
+#cffi-virtual_desktops button.hover.vdesk-unfocused {
+    color: @on_surface_variant;
+}
+
+/* Animation States */
+#cffi-virtual_desktops button.creating {
+    opacity: 0;
+}
+
+#cffi-virtual_desktops button.destroying {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Hidden Virtual Desktops */
+#cffi-virtual_desktops button.hidden {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Alternative color schemes for different Matugen themes:
+ * 
+ * For warmer themes, you might prefer:
+ * #cffi-virtual_desktops button {
+ *     color: rgba(255, 180, 150, 0.4);
+ * }
+ * 
+ * For cooler themes, you might prefer:
+ * #cffi-virtual_desktops button {
+ *     color: rgba(150, 180, 255, 0.4);
+ * }
+ */

@@ -2,12 +2,30 @@
 
 A high-performance CFFI module for [Waybar](https://github.com/Alexays/Waybar) that displays [Hyprland virtual desktops](https://github.com/levnikmyskin/hyprland-virtual-desktops) with real-time updates and click handling.
 
+![Waybar-VD in action](screenshots/hero/basic-functionality.png)
+
+> **🔗 Virtual Desktops vs Workspaces**: Unlike regular Hyprland workspaces that switch per monitor, virtual desktops switch ALL monitors simultaneously, creating a multi-monitor desktop environment.
+
+![Multi-monitor virtual desktop switching](screenshots/hero/multi-monitor-switching-final.gif)
+
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Waybar](https://img.shields.io/badge/waybar-0.12.0+-green.svg)](https://github.com/Alexays/Waybar)
 
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [CSS Styling](#css-styling)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+
 ## Features
 
+- **Multi-Monitor Virtual Desktops**: Unlike workspaces, switches ALL monitors simultaneously
 - **Real-time Updates**: Monitors Hyprland IPC events for instant virtual desktop state changes
 - **Interactive UI**: Click handling and smooth hover effects for enhanced user experience
 - **Smooth Animations**: Beautiful fade-in/fade-out transitions for desktop creation and destruction
@@ -205,6 +223,20 @@ After installation, example configurations are available in `~/.config/waybar/ex
 ## CSS Styling
 
 The module uses GTK Button widgets and applies CSS classes for comprehensive styling support. Complete styling examples are available in the `examples/style.css` file.
+
+### Styling Examples
+
+**Material Design Theme**
+![Material Design](screenshots/hero/basic-functionality.png)
+*Rounded corners, colored backgrounds, smooth transitions*
+
+**Minimal Theme**
+![Minimal Theme](screenshots/styling/minimal-theme.png)
+*Clean lines, simple colors, subtle focus indicators*
+
+**Available Style Examples:**
+- `examples/material-design-style.css` - Modern Material Design theme with Matugen support
+- `examples/minimal-style.css` - Clean, minimal styling with subtle highlights
 
 ### Modern Styling Example
 

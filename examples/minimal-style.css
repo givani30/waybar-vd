@@ -1,0 +1,58 @@
+/* Minimal Theme for waybar-vd
+ * Clean, simple styling with minimal visual elements
+ * Perfect for users who prefer subtle, unobtrusive interfaces
+ */
+
+@import "colors.css";
+
+/* Minimal Virtual Desktop Module Container */
+#cffi-virtual_desktops {
+    padding: 0px 3px;
+    background: transparent;
+}
+
+/* Minimal button styling - clean and simple */
+#cffi-virtual_desktops button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 3px 8px;
+    margin: 0 1px;
+    border-radius: 0;
+    color: #666;
+    font-weight: normal;
+    transition: color 0.1s ease;
+    font-size: inherit;
+    font-family: inherit;
+    min-width: 24px;
+}
+
+/* Focused Virtual Desktop - minimal highlight with underline */
+#cffi-virtual_desktops button.vdesk-focused {
+    color: #fff;
+    font-weight: bold;
+    background: none;
+    border-bottom: 1px solid #fff;
+}
+
+/* Unfocused Virtual Desktop - subtle gray */
+#cffi-virtual_desktops button.vdesk-unfocused {
+    color: #888;
+    font-weight: normal;
+}
+
+/* Minimal hover effects */
+#cffi-virtual_desktops button.hover.vdesk-focused {
+    color: #fff;
+}
+
+#cffi-virtual_desktops button.hover.vdesk-unfocused {
+    color: #bbb;
+}
+
+/* Hidden Virtual Desktops */
+#cffi-virtual_desktops button.hidden {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+}
