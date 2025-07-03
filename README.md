@@ -49,7 +49,8 @@ This module requires the [Hyprland Virtual Desktop Plugin](https://github.com/le
 
 **Installation of the plugin:**
 ```bash
-# Install via hyprpm (recommended)
+# Install via hyprpm (recommended). Hyprpm is Hyprlands plugin manager which is bundled in with recent versions of Hyprland
+hyprpm update
 hyprpm add https://github.com/levnikmyskin/hyprland-virtual-desktops
 hyprpm enable virtual-desktops
 
