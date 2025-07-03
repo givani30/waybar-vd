@@ -9,13 +9,12 @@ use crate::errors::Result;
 use std::collections::{BTreeMap, HashSet, HashMap};
 use std::sync::Arc;
 use tokio::runtime::Handle;
-use waybar_cffi::gtk::{prelude::*, Label, Box as GtkBox, EventBox};
+use waybar_cffi::gtk::{self, gdk, prelude::*, Button, Box as GtkBox};
 
 /// Virtual desktop widget
 #[derive(Debug)]
 pub struct VirtualDesktopWidget {
-    pub event_box: EventBox,
-    pub label: Label,
+    pub button: Button,
     pub vdesk_id: u32,
     pub display_text: String,
     pub tooltip_text: String,
@@ -31,96 +30,49 @@ impl VirtualDesktopWidget {
         config: &ModuleConfig,
         runtime_handle: Handle,
     ) -> Self {
-        let label = Label::new(Some(&display_text));
-        label.set_tooltip_text(Some(&tooltip_text));
+        // Create Button directly with label text
+        let button = Button::with_label(&display_text);
+        button.set_tooltip_text(Some(&tooltip_text));
+        
+        // Apply Waybar-style button settings  
+        button.set_relief(gtk::ReliefStyle::None);
 
-        // Make the label clickable and hoverable
-        let event_box = EventBox::new();
-
-        // Configure EventBox for proper hover detection
-        event_box.set_above_child(true);  // Ensure EventBox receives events
-        event_box.set_visible_window(false);  // Keep transparent background
-
-        // Try to enable hover events by setting the widget as sensitive to events
-        event_box.set_can_focus(false);  // Don't steal focus
-        event_box.set_sensitive(true);   // Enable event handling
-
-        // Add hover event debugging and manual state management
-        // Apply hover class to EventBox for better CSS targeting
-        let event_box_clone = event_box.clone();
-        event_box.connect_enter_notify_event(move |widget, _| {
-            log::debug!("EventBox hover ENTER detected for widget");
-            // Add hover state to EventBox for CSS targeting
-            let style_context = widget.style_context();
-            style_context.add_class("hover");
-
-            // Also add to EventBox clone for redundancy
-            let event_box_style = event_box_clone.style_context();
-            event_box_style.add_class("hover");
-
-            false.into()
-        });
-
-        let event_box_clone2 = event_box.clone();
-        event_box.connect_leave_notify_event(move |widget, _| {
-            log::debug!("EventBox hover LEAVE detected for widget");
-            // Remove hover state from EventBox
-            let style_context = widget.style_context();
-            style_context.remove_class("hover");
-
-            // Also remove from EventBox clone for redundancy
-            let event_box_style = event_box_clone2.style_context();
-            event_box_style.remove_class("hover");
-
-            false.into()
-        });
-
-        event_box.add(&label);
-
-        // Set up click handler using async IPC
+        // Set up click handler using simpler connect_clicked signal
         let vdesk_id_for_click = vdesk.id;
-        event_box.connect_button_press_event(move |_, event| {
-            if event.button() == 1 { // Left click
-                let handle = runtime_handle.clone();
-                let vdesk_id = vdesk_id_for_click;
+        button.connect_clicked(move |_| {
+            let handle = runtime_handle.clone();
+            let vdesk_id = vdesk_id_for_click;
 
-                // Spawn async task to handle the click
-                handle.spawn(async move {
-                    match HyprlandIPC::new().await {
-                        Ok(ipc) => {
-                            if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
-                                log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to create Hyprland IPC for click handler: {}", e);
+            // Spawn async task to handle the click
+            handle.spawn(async move {
+                match HyprlandIPC::new().await {
+                    Ok(ipc) => {
+                        if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
+                            log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
                         }
                     }
-                });
-            }
-            false.into()
+                    Err(e) => {
+                        log::error!("Failed to create Hyprland IPC for click handler: {}", e);
+                    }
+                }
+            });
         });
 
-        // Apply CSS classes to both label and event_box for proper styling
-        let label_style_context = label.style_context();
-        let event_box_style_context = event_box.style_context();
+        // Apply CSS classes directly to button's style context
+        let style_context = button.style_context();
 
         if vdesk.focused {
-            label_style_context.add_class("vdesk-focused");
-            event_box_style_context.add_class("vdesk-focused");
+            style_context.add_class("vdesk-focused");
         } else {
-            label_style_context.add_class("vdesk-unfocused");
-            event_box_style_context.add_class("vdesk-unfocused");
+            style_context.add_class("vdesk-unfocused");
         }
 
         if !vdesk.populated && !config.show_empty {
-            label_style_context.add_class("hidden");
-            event_box_style_context.add_class("hidden");
+            style_context.add_class("hidden");
         }
 
         Self {
-            event_box,
-            label,
+            button,
             vdesk_id: vdesk.id,
             display_text,
             tooltip_text,
@@ -139,33 +91,28 @@ impl VirtualDesktopWidget {
 
         // Update display text if changed
         if self.display_text != display_text {
-            self.label.set_text(&display_text);
+            self.button.set_label(&display_text);
             self.display_text = display_text;
             updated = true;
         }
 
         // Update tooltip if changed
         if self.tooltip_text != tooltip_text {
-            self.label.set_tooltip_text(Some(&tooltip_text));
+            self.button.set_tooltip_text(Some(&tooltip_text));
             self.tooltip_text = tooltip_text;
             updated = true;
         }
 
         // Update CSS classes if focus state changed
         if self.focused != vdesk.focused {
-            let label_style_context = self.label.style_context();
-            let event_box_style_context = self.event_box.style_context();
+            let style_context = self.button.style_context();
 
             if vdesk.focused {
-                label_style_context.remove_class("vdesk-unfocused");
-                label_style_context.add_class("vdesk-focused");
-                event_box_style_context.remove_class("vdesk-unfocused");
-                event_box_style_context.add_class("vdesk-focused");
+                style_context.remove_class("vdesk-unfocused");
+                style_context.add_class("vdesk-focused");
             } else {
-                label_style_context.remove_class("vdesk-focused");
-                label_style_context.add_class("vdesk-unfocused");
-                event_box_style_context.remove_class("vdesk-focused");
-                event_box_style_context.add_class("vdesk-unfocused");
+                style_context.remove_class("vdesk-focused");
+                style_context.add_class("vdesk-unfocused");
             }
             self.focused = vdesk.focused;
             updated = true;
@@ -211,7 +158,7 @@ impl WidgetManager {
 
         for widget_id in widgets_to_remove {
             if let Some(widget) = self.widgets.remove(&widget_id) {
-                self.container.remove(&widget.event_box);
+                self.container.remove(&widget.button);
                 self.widget_order.retain(|&id| id != widget_id);
             }
         }
@@ -245,7 +192,7 @@ impl WidgetManager {
                     &self.config,
                     self.runtime_handle.clone(),
                 );
-                self.container.add(&widget.event_box);
+                self.container.add(&widget.button);
                 self.widgets.insert(vdesk.id, widget);
             }
         }
@@ -320,7 +267,7 @@ impl WidgetManager {
             // Note: GTK3 doesn't have freeze/thaw, but we can minimize calls
             for (widget_id, target_pos) in moves_needed {
                 if let Some(widget) = self.widgets.get(&widget_id) {
-                    self.container.reorder_child(&widget.event_box, target_pos as i32);
+                    self.container.reorder_child(&widget.button, target_pos as i32);
                 }
             }
         } else {

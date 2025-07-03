@@ -1,21 +1,6 @@
-/* Virtual Desktop CFFI Test Styling */
+/* Virtual Desktop CFFI Test Styling - Button-based Implementation */
 
-/* Material You Color Scheme:
- * background: #141318
- * on_surface: #e6e1e9
- * primary: #cdbdff
- * on_primary: #36343a
- * surface_container: #201f24
- * surface_container_high: #2b292f
- * surface_container_highest: #36343a
- * surface_container_low: #1c1b20
- * surface_container_lowest: #0f0d13
- * surface_dim: #141318
- * surface_tint: #cdbdff
- * surface_variant: #48454e
- */
-
-/* Global Styling */
+/* Material You Color Scheme */
 * {
     font-size: 15px;
     font-family: "CodeNewRoman Nerd Font Propo", "JetBrainsMono Nerd Font", monospace;
@@ -31,7 +16,7 @@ window#waybar {
     padding: 7px;
     margin: 10px 0 5px 0;
     border-radius: 10px;
-    background: rgba(20, 19, 24, 0.6); /* alpha(background, 0.6) */
+    background: rgba(20, 19, 24, 0.6);
     box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.6);
 }
 
@@ -40,80 +25,57 @@ window#waybar {
     padding: 0px 5px;
 }
 
-/* Simple, clean syntax - full control with minimal complexity */
-#cffi-virtual_desktops eventbox {
-    padding: 0px 8px;
-    margin: 0 4px;
+/* CRITICAL: Reset default button styles to make them look like simple labels */
+#cffi-virtual_desktops button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 2px 8px;
+    margin: 0 2px;
     border-radius: 4px;
-}
-
-#cffi-virtual_desktops label {
-    all: unset;
-    color: rgba(205, 189, 255, 0.4); /* Default state */
+    min-width: 0;
+    color: rgba(205, 189, 255, 0.4);
+    font-weight: normal;
 }
 
 /* Focused desktop */
-#cffi-virtual_desktops label.vdesk-focused {
+#cffi-virtual_desktops button.vdesk-focused {
     color: #cdbdff;
     font-weight: bold;
+    background-color: rgba(205, 189, 255, 0.1);
 }
 
-/* Unfocused desktop - dimmed */
-#cffi-virtual_desktops label.vdesk-unfocused {
+/* Unfocused desktop */
+#cffi-virtual_desktops button.vdesk-unfocused {
     color: rgba(205, 189, 255, 0.3);
     font-weight: normal;
 }
 
-/* Hover effects - using more reliable GTK CSS properties */
-/* Base hover state - increase specificity and use reliable properties */
-#cffi-virtual_desktops eventbox.hover label {
-    background-color: rgba(205, 189, 255, 0.1);
-    color: rgba(205, 189, 255, 0.8);
-    font-weight: bold;
-}
-
-/* Focused desktop hover - higher specificity */
-#cffi-virtual_desktops eventbox.vdesk-focused.hover label {
-    background-color: rgba(205, 189, 255, 0.2);
-    color: #cdbdff;
-    font-weight: bold;
-}
-
-/* Unfocused desktop hover - higher specificity */
-#cffi-virtual_desktops eventbox.vdesk-unfocused.hover label {
-    background-color: rgba(205, 189, 255, 0.1);
-    color: rgba(205, 189, 255, 0.6);
-    font-weight: bold;
-}
-
-/* Alternative hover effects using basic GTK properties for maximum compatibility */
-/* These provide fallback if the above selectors don't work */
-#cffi-virtual_desktops .hover {
-    background: rgba(205, 189, 255, 0.15);
-    border-radius: 4px;
-}
-
-#cffi-virtual_desktops label.hover {
+/* Native hover effects - this is the key improvement! */
+#cffi-virtual_desktops button:hover {
+    background-color: rgba(205, 189, 255, 0.15);
     color: rgba(205, 189, 255, 0.9);
 }
 
-/* EventBox hover styling for better visual feedback */
-#cffi-virtual_desktops eventbox:hover {
-    background-color: rgba(205, 189, 255, 0.1);
+#cffi-virtual_desktops button.vdesk-focused:hover {
+    background-color: rgba(205, 189, 255, 0.2);
+    color: #cdbdff;
 }
 
-#cffi-virtual_desktops eventbox:hover label {
-    color: rgba(205, 189, 255, 0.8);
+#cffi-virtual_desktops button.vdesk-unfocused:hover {
+    background-color: rgba(205, 189, 255, 0.1);
+    color: rgba(205, 189, 255, 0.7);
 }
 
 /* Hidden desktops */
-#cffi-virtual_desktops .hidden {
+#cffi-virtual_desktops button.hidden {
+    padding: 0;
+    margin: 0;
     opacity: 0;
-    transition: all 0.15s ease;
 }
 
 /* Tooltip styling */
 tooltip {
-    background: #141318; /* background */
-    color: #e6e1e9; /* on_surface */
+    background: #141318;
+    color: #e6e1e9;
 }

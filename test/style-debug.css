@@ -1,0 +1,37 @@
+/* Debug CSS - Minimal test for button hover effects */
+
+* {
+    font-size: 15px;
+    font-family: monospace;
+}
+
+window#waybar {
+    all: unset;
+}
+
+.modules-center {
+    padding: 7px;
+    margin: 10px 0 5px 0;
+    border-radius: 10px;
+    background: rgba(20, 19, 24, 0.6);
+}
+
+#cffi-virtual_desktops {
+    padding: 0px 5px;
+}
+
+/* Reset button styles completely */
+#cffi-virtual_desktops button {
+    all: unset;
+    padding: 4px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    color: white;
+    background: red; /* Make it visible */
+}
+
+/* Simple hover test */
+#cffi-virtual_desktops button:hover {
+    background: green !important; /* Force override */
+    color: yellow !important;
+}
