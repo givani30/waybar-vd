@@ -13,7 +13,7 @@
     "modules-right": [],
     
     "cffi/virtual_desktops": {
-        "module_path": "/home/givanib/Code/Vd_waybar/target/release/libwaybar_virtual_desktops_cffi.so",
+        "module_path": "../target/release/libwaybar_virtual_desktops_cffi.so",
         "config": {
             "format": "{icon} {name}",
             "format_icons": {
