@@ -216,7 +216,6 @@ show_next_steps() {
     echo
     print_info "4. Check the documentation:"
     print_info "   - README.md for detailed configuration options"
-    print_info "   - MIGRATION.md if migrating from shell scripts"
     echo
     print_info "Library installed at: $INSTALL_DIR/$LIB_NAME"
     
