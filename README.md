@@ -9,7 +9,8 @@ A high-performance CFFI module for Waybar that displays Hyprland virtual desktop
 ## Features
 
 - **Real-time Updates**: Monitors Hyprland IPC events for instant virtual desktop state changes
-- **Click Handling**: Click on virtual desktops to switch between them
+- **Interactive UI**: Click handling and smooth hover effects for enhanced user experience
+- **Smooth Animations**: Beautiful fade-in/fade-out transitions for desktop creation and destruction
 - **Customizable Display**: Configurable format strings, icons, and styling
 - **Performance**: Native Rust implementation with minimal overhead
 - **GTK Integration**: Seamless integration with Waybar's GTK3 interface
@@ -150,51 +151,102 @@ The `format` string supports these variables:
 
 ## CSS Styling
 
-The module applies CSS classes that you can style:
+The module uses GTK Button widgets and applies CSS classes for comprehensive styling support.
+
+### Modern Styling Example
 
 ```css
 /* Virtual Desktop Module Container */
 #cffi-virtual-desktops {
-    background-color: transparent;
-    padding: 0 10px;
+    padding: 0px 5px;
+}
+
+/* Reset button defaults for clean styling */
+#cffi-virtual-desktops button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 2px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    color: rgba(205, 189, 255, 0.4);
+    font-weight: normal;
+    /* Smooth transitions for all interactions */
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    font-size: inherit;
+    font-family: inherit;
 }
 
 /* Focused Virtual Desktop */
-#cffi-virtual-desktops .vdesk-focused {
-    background-color: #5e81ac;
-    color: #eceff4;
-    border-radius: 3px;
-    padding: 2px 6px;
-    margin: 0 2px;
+#cffi-virtual-desktops button.vdesk-focused {
+    color: #cdbdff;
     font-weight: bold;
+    background-color: rgba(205, 189, 255, 0.1);
 }
 
 /* Unfocused Virtual Desktop */
-#cffi-virtual-desktops .vdesk-unfocused {
-    background-color: #4c566a;
-    color: #d8dee9;
-    border-radius: 3px;
-    padding: 2px 6px;
-    margin: 0 2px;
+#cffi-virtual-desktops button.vdesk-unfocused {
+    color: rgba(205, 189, 255, 0.3);
+    font-weight: normal;
 }
 
-/* Hover Effect */
-#cffi-virtual-desktops .vdesk-unfocused:hover {
-    background-color: #5e81ac;
-    color: #eceff4;
+/* Manual Hover Effects (CSS :hover doesn't work in CFFI modules) */
+#cffi-virtual-desktops button.hover {
+    background-color: rgba(205, 189, 255, 0.15);
+    color: rgba(205, 189, 255, 0.9);
+}
+
+#cffi-virtual-desktops button.hover.vdesk-focused {
+    background-color: rgba(205, 189, 255, 0.25);
+    color: #cdbdff;
+}
+
+#cffi-virtual-desktops button.hover.vdesk-unfocused {
+    background-color: rgba(205, 189, 255, 0.12);
+    color: rgba(205, 189, 255, 0.7);
+}
+
+/* Animation States */
+#cffi-virtual-desktops button.creating {
+    opacity: 0;
+}
+
+#cffi-virtual-desktops button.destroying {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
 }
 
 /* Hidden Virtual Desktops */
-#cffi-virtual-desktops .hidden {
-    display: none;
+#cffi-virtual-desktops button.hidden {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
 }
 ```
 
 ### Available CSS Classes
 
-- `.vdesk-focused` - Applied to the currently focused virtual desktop
-- `.vdesk-unfocused` - Applied to unfocused virtual desktops
-- `.hidden` - Applied to empty virtual desktops when `show_empty` is false
+#### State Classes
+- `button.vdesk-focused` - Applied to the currently focused virtual desktop
+- `button.vdesk-unfocused` - Applied to unfocused virtual desktops
+- `button.hidden` - Applied to empty virtual desktops when `show_empty` is false
+
+#### Interactive Classes
+- `button.hover` - Applied during mouse hover (manual hover state management)
+- `button.creating` - Applied briefly when new desktop buttons are created
+- `button.destroying` - Applied briefly when desktop buttons are being removed
+
+### Styling Notes
+
+#### Hover Effects
+**Important**: Due to Waybar CFFI module limitations, native CSS `:hover` pseudo-selectors don't work. The module implements manual hover state management using the `.hover` class. Always style hover effects using `button.hover` instead of `button:hover`.
+
+#### Button Reset
+The module uses GTK Button widgets for proper click handling and accessibility. Use the button reset styles shown above to achieve a clean, label-like appearance while maintaining interactive functionality.
+
+#### Animations
+The module includes smooth 150ms fade-in/fade-out animations for desktop creation and destruction. The CSS transitions should match this timing for consistent visual feedback.
 
 ## Troubleshooting
 
@@ -272,9 +324,11 @@ The test system is **completely safe** - it runs a separate waybar instance that
 
 - **Language**: Rust (2021 edition)
 - **Runtime**: Tokio async runtime for IPC operations
-- **UI Framework**: GTK3 via waybar-cffi bindings
+- **UI Framework**: GTK3 Button widgets via waybar-cffi bindings
 - **IPC Protocol**: Direct Unix socket communication with Hyprland
 - **Threading**: Background thread for event monitoring, main thread for UI updates
+- **Animations**: Manual hover state management with 150ms CSS transitions
+- **Event Handling**: Native GTK enter/leave notify events for reliable hover detection
 
 ## Performance
 

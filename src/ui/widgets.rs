@@ -9,7 +9,8 @@ use crate::errors::Result;
 use std::collections::{BTreeMap, HashSet, HashMap};
 use std::sync::Arc;
 use tokio::runtime::Handle;
-use waybar_cffi::gtk::{self, gdk, prelude::*, Button, Box as GtkBox};
+use waybar_cffi::gtk::{self, gdk, glib, prelude::*, Button, Box as GtkBox};
+use glib::ControlFlow;
 
 /// Virtual desktop widget
 #[derive(Debug)]
@@ -180,11 +181,26 @@ impl WidgetManager {
             .copied()
             .collect();
 
+        // Animate widget destruction with fade-out
         for widget_id in widgets_to_remove {
-            if let Some(widget) = self.widgets.remove(&widget_id) {
-                self.container.remove(&widget.button);
-                self.widget_order.retain(|&id| id != widget_id);
+            if let Some(widget) = self.widgets.get(&widget_id) {
+                let style_context = widget.button.style_context();
+                style_context.add_class("destroying");
+                
+                // Remove widget after animation completes
+                let container_clone = self.container.clone();
+                let button_clone = widget.button.clone();
+                let _widget_id_copy = widget_id;
+                
+                glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
+                    container_clone.remove(&button_clone);
+                    ControlFlow::Break
+                });
             }
+            
+            // Remove from our tracking immediately
+            self.widgets.remove(&widget_id);
+            self.widget_order.retain(|&id| id != widget_id);
         }
 
         // Update or create widgets for visible virtual desktops
@@ -216,8 +232,22 @@ impl WidgetManager {
                     &self.config,
                     self.runtime_handle.clone(),
                 );
+                
+                // Start with creating animation state
+                let style_context = widget.button.style_context();
+                style_context.add_class("creating");
+                
                 self.container.add(&widget.button);
-                widget.button.show(); // Ensure new widget is visible
+                widget.button.show();
+                
+                // Trigger fade-in animation after a brief delay
+                let button_clone = widget.button.clone();
+                glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                    let style_context = button_clone.style_context();
+                    style_context.remove_class("creating");
+                    ControlFlow::Break
+                });
+                
                 self.widgets.insert(vdesk.id, widget);
             }
         }

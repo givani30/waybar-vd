@@ -35,7 +35,8 @@ window#waybar {
     border-radius: 4px;
     color: rgba(205, 189, 255, 0.4);
     font-weight: normal;
-    transition: all 0.15s ease;
+    /* Smooth transitions for all properties including creation/destruction */
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     /* Ensure text is visible */
     font-size: inherit;
     font-family: inherit;
@@ -72,11 +73,22 @@ window#waybar {
     color: rgba(205, 189, 255, 0.9);
 }
 
-/* Hidden desktops */
+/* Hidden desktops - smooth fade out */
 #cffi-virtual_desktops button.hidden {
+    opacity: 0;
     padding: 0;
     margin: 0;
+}
+
+/* Animation states for creation/destruction */
+#cffi-virtual_desktops button.creating {
     opacity: 0;
+}
+
+#cffi-virtual_desktops button.destroying {
+    opacity: 0;
+    padding: 0;
+    margin: 0;
 }
 
 /* Tooltip styling */
