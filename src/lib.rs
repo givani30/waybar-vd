@@ -140,8 +140,12 @@ impl Module for VirtualDesktopsModule {
         log::debug!("Module config: format={}, show_empty={}", module_config.format, module_config.show_empty);
         let container = info.get_root_widget();
         let hbox = GtkBox::new(Orientation::Horizontal, 0);
+
+        // Set CSS name for styling
+        hbox.set_widget_name("cffi-virtual_desktops");
+
         container.add(&hbox);
-        log::debug!("Created GTK container widget");
+        log::debug!("Created GTK container widget with CSS name 'cffi-virtual_desktops'");
 
         let rt = Arc::new(tokio::runtime::Runtime::new()
             .expect("Failed to create Tokio runtime"));

@@ -34,8 +34,47 @@ impl VirtualDesktopWidget {
         let label = Label::new(Some(&display_text));
         label.set_tooltip_text(Some(&tooltip_text));
 
-        // Make the label clickable
+        // Make the label clickable and hoverable
         let event_box = EventBox::new();
+
+        // Configure EventBox for proper hover detection
+        event_box.set_above_child(true);  // Ensure EventBox receives events
+        event_box.set_visible_window(false);  // Keep transparent background
+
+        // Try to enable hover events by setting the widget as sensitive to events
+        event_box.set_can_focus(false);  // Don't steal focus
+        event_box.set_sensitive(true);   // Enable event handling
+
+        // Add hover event debugging and manual state management
+        // Apply hover class to EventBox for better CSS targeting
+        let event_box_clone = event_box.clone();
+        event_box.connect_enter_notify_event(move |widget, _| {
+            log::debug!("EventBox hover ENTER detected for widget");
+            // Add hover state to EventBox for CSS targeting
+            let style_context = widget.style_context();
+            style_context.add_class("hover");
+
+            // Also add to EventBox clone for redundancy
+            let event_box_style = event_box_clone.style_context();
+            event_box_style.add_class("hover");
+
+            false.into()
+        });
+
+        let event_box_clone2 = event_box.clone();
+        event_box.connect_leave_notify_event(move |widget, _| {
+            log::debug!("EventBox hover LEAVE detected for widget");
+            // Remove hover state from EventBox
+            let style_context = widget.style_context();
+            style_context.remove_class("hover");
+
+            // Also remove from EventBox clone for redundancy
+            let event_box_style = event_box_clone2.style_context();
+            event_box_style.remove_class("hover");
+
+            false.into()
+        });
+
         event_box.add(&label);
 
         // Set up click handler using async IPC
@@ -62,16 +101,21 @@ impl VirtualDesktopWidget {
             false.into()
         });
 
-        // Apply CSS classes based on state
-        let style_context = label.style_context();
+        // Apply CSS classes to both label and event_box for proper styling
+        let label_style_context = label.style_context();
+        let event_box_style_context = event_box.style_context();
+
         if vdesk.focused {
-            style_context.add_class("vdesk-focused");
+            label_style_context.add_class("vdesk-focused");
+            event_box_style_context.add_class("vdesk-focused");
         } else {
-            style_context.add_class("vdesk-unfocused");
+            label_style_context.add_class("vdesk-unfocused");
+            event_box_style_context.add_class("vdesk-unfocused");
         }
 
         if !vdesk.populated && !config.show_empty {
-            style_context.add_class("hidden");
+            label_style_context.add_class("hidden");
+            event_box_style_context.add_class("hidden");
         }
 
         Self {
@@ -109,13 +153,19 @@ impl VirtualDesktopWidget {
 
         // Update CSS classes if focus state changed
         if self.focused != vdesk.focused {
-            let style_context = self.label.style_context();
+            let label_style_context = self.label.style_context();
+            let event_box_style_context = self.event_box.style_context();
+
             if vdesk.focused {
-                style_context.remove_class("vdesk-unfocused");
-                style_context.add_class("vdesk-focused");
+                label_style_context.remove_class("vdesk-unfocused");
+                label_style_context.add_class("vdesk-focused");
+                event_box_style_context.remove_class("vdesk-unfocused");
+                event_box_style_context.add_class("vdesk-focused");
             } else {
-                style_context.remove_class("vdesk-focused");
-                style_context.add_class("vdesk-unfocused");
+                label_style_context.remove_class("vdesk-focused");
+                label_style_context.add_class("vdesk-unfocused");
+                event_box_style_context.remove_class("vdesk-focused");
+                event_box_style_context.add_class("vdesk-unfocused");
             }
             self.focused = vdesk.focused;
             updated = true;

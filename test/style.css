@@ -1,12 +1,29 @@
-/* Virtual Desktop CFFI Test Styling - Simple Version */
+/* Virtual Desktop CFFI Test Styling */
+
+/* Material You Color Scheme:
+ * background: #141318
+ * on_surface: #e6e1e9
+ * primary: #cdbdff
+ * on_primary: #36343a
+ * surface_container: #201f24
+ * surface_container_high: #2b292f
+ * surface_container_highest: #36343a
+ * surface_container_low: #1c1b20
+ * surface_container_lowest: #0f0d13
+ * surface_dim: #141318
+ * surface_tint: #cdbdff
+ * surface_variant: #48454e
+ */
+
+/* Global Styling */
+* {
+    font-size: 15px;
+    font-family: "CodeNewRoman Nerd Font Propo", "JetBrainsMono Nerd Font", monospace;
+}
 
 /* Waybar Window */
 window#waybar {
-    background-color: transparent;
-    color: #e6e1e9;
-    font-family: "JetBrainsMono Nerd Font", monospace;
-    font-size: 14px;
-    font-weight: 500;
+    all: unset;
 }
 
 /* Center modules container */
@@ -14,57 +31,89 @@ window#waybar {
     padding: 7px;
     margin: 10px 0 5px 0;
     border-radius: 10px;
-    background: rgba(20, 19, 24, 0.6);
+    background: rgba(20, 19, 24, 0.6); /* alpha(background, 0.6) */
     box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.6);
 }
 
-/* Virtual Desktop CFFI Module Container - styling handled by individual labels */
+/* Virtual Desktop CFFI Module */
+#cffi-virtual_desktops {
+    padding: 0px 5px;
+}
 
-/* Individual Virtual Desktop Labels */
-#cffi-virtual_desktops label {
+/* Simple, clean syntax - full control with minimal complexity */
+#cffi-virtual_desktops eventbox {
     padding: 0px 8px;
-    margin: 0 2px;
-    transition: all 0.15s ease;
+    margin: 0 4px;
     border-radius: 4px;
-    min-width: 0;
 }
 
-/* Hidden virtual desktops (smooth disappearance) */
-#cffi-virtual_desktops label.hidden {
-    padding: 0;
-    margin: 0;
-    opacity: 0;
-    transition: all 0.15s ease;
+#cffi-virtual_desktops label {
+    all: unset;
+    color: rgba(205, 189, 255, 0.4); /* Default state */
 }
 
-/* Focused virtual desktop */
+/* Focused desktop */
 #cffi-virtual_desktops label.vdesk-focused {
     color: #cdbdff;
     font-weight: bold;
-    text-shadow: 0px 0px 2px rgba(205, 189, 255, 0.3);
-    background: rgba(205, 189, 255, 0.1);
 }
 
-/* Unfocused virtual desktop */
+/* Unfocused desktop - dimmed */
 #cffi-virtual_desktops label.vdesk-unfocused {
-    color: rgba(230, 225, 233, 0.7);
-    transition: all 0.15s ease;
+    color: rgba(205, 189, 255, 0.3);
+    font-weight: normal;
 }
 
-/* Hover effects for unfocused desktops */
-#cffi-virtual_desktops label.vdesk-unfocused:hover {
+/* Hover effects - using more reliable GTK CSS properties */
+/* Base hover state - increase specificity and use reliable properties */
+#cffi-virtual_desktops eventbox.hover label {
+    background-color: rgba(205, 189, 255, 0.1);
+    color: rgba(205, 189, 255, 0.8);
+    font-weight: bold;
+}
+
+/* Focused desktop hover - higher specificity */
+#cffi-virtual_desktops eventbox.vdesk-focused.hover label {
+    background-color: rgba(205, 189, 255, 0.2);
     color: #cdbdff;
-    background: rgba(205, 189, 255, 0.05);
+    font-weight: bold;
+}
+
+/* Unfocused desktop hover - higher specificity */
+#cffi-virtual_desktops eventbox.vdesk-unfocused.hover label {
+    background-color: rgba(205, 189, 255, 0.1);
+    color: rgba(205, 189, 255, 0.6);
+    font-weight: bold;
+}
+
+/* Alternative hover effects using basic GTK properties for maximum compatibility */
+/* These provide fallback if the above selectors don't work */
+#cffi-virtual_desktops .hover {
+    background: rgba(205, 189, 255, 0.15);
+    border-radius: 4px;
+}
+
+#cffi-virtual_desktops label.hover {
+    color: rgba(205, 189, 255, 0.9);
+}
+
+/* EventBox hover styling for better visual feedback */
+#cffi-virtual_desktops eventbox:hover {
+    background-color: rgba(205, 189, 255, 0.1);
+}
+
+#cffi-virtual_desktops eventbox:hover label {
+    color: rgba(205, 189, 255, 0.8);
+}
+
+/* Hidden desktops */
+#cffi-virtual_desktops .hidden {
+    opacity: 0;
     transition: all 0.15s ease;
 }
 
 /* Tooltip styling */
 tooltip {
-    background: #201f24;
-    color: #e6e1e9;
-    border-radius: 8px;
-    border: 1px solid rgba(205, 189, 255, 0.2);
-    font-size: 12px;
-    padding: 8px;
-    box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.6);
+    background: #141318; /* background */
+    color: #e6e1e9; /* on_surface */
 }
