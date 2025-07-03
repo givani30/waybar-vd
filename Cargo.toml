@@ -44,10 +44,10 @@ futures = "0.3"
 [build-dependencies]
 # For generating bindings if needed
 bindgen = "0.69"
-
 [profile.release]
 # Optimize for size and performance
 lto = true              # Link-time optimization for smaller binary
 panic = "abort"         # Abort on panic (smaller than unwinding)
 strip = true            # Automatically strip debug symbols
 opt-level = "s"         # Optimize for size but maintain performance
+

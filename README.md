@@ -106,7 +106,7 @@ Add the module to your Waybar configuration:
     "modules-center": ["cffi/virtual-desktops"],
     
     "cffi/virtual-desktops": {
-        "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+        "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
         "format": "{name}",
         "show_empty": false
     }
@@ -117,7 +117,7 @@ Add the module to your Waybar configuration:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `library-path` | string | **required** | Path to the compiled CFFI library |
+| `module_path` | string | **required** | Path to the compiled CFFI module_path |
 | `format` | string | `"{name}"` | Format string for virtual desktop display |
 | `show_empty` | boolean | `false` | Whether to show empty virtual desktops |
 | `separator` | string | `" "` | Separator between virtual desktop elements |
@@ -143,7 +143,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### Simple Text Display
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{name}",
     "show_empty": false
 }
@@ -152,7 +152,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### With Icons
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{icon} {name}",
     "format_icons": {
         "1": "󰲠",
@@ -169,7 +169,7 @@ After installation, example configurations are available in `~/.config/waybar/ex
 #### Advanced Configuration
 ```json
 "cffi/virtual-desktops": {
-    "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+    "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
     "format": "{icon} {name} ({window_count})",
     "format_icons": {
         "work": "💼",

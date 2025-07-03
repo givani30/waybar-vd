@@ -4,7 +4,7 @@
     "modules-center": ["cffi/virtual-desktops"],
     
     "cffi/virtual-desktops": {
-        "library-path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
+        "module_path": "~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so",
         "format": "{name}",
         "show_empty": false,
         "separator": " ",
