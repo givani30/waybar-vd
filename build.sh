@@ -74,7 +74,8 @@ build_library() {
     
     # Build in release mode
     cargo build --release
-    
+    # Strip debug symbols
+    strip target/release/libwaybar_virtual_desktops_cffi.so
     if [ $? -eq 0 ]; then
         print_success "Library built successfully"
     else
