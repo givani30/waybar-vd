@@ -62,7 +62,24 @@ waybar-virtual-desktops-cffi/
 
 ## Installation
 
-### Quick Install (Recommended)
+### Download Pre-compiled Binary (Recommended)
+
+Download the latest release from GitHub:
+
+```bash
+# Create modules directory
+mkdir -p ~/.config/waybar/modules
+
+# Download the latest release
+wget -O ~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so \
+  https://github.com/givani30/waybar-virtual-desktops-cffi/releases/latest/download/libwaybar_virtual_desktops_cffi.so
+
+# Or using curl
+curl -L -o ~/.config/waybar/modules/libwaybar_virtual_desktops_cffi.so \
+  https://github.com/givani30/waybar-virtual-desktops-cffi/releases/latest/download/libwaybar_virtual_desktops_cffi.so
+```
+
+### Quick Install from Source (Alternative)
 
 ```bash
 # Clone the repository
