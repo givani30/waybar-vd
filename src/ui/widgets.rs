@@ -36,6 +36,24 @@ impl VirtualDesktopWidget {
         
         // Apply Waybar-style button settings  
         button.set_relief(gtk::ReliefStyle::None);
+        
+        // Enable hover event detection
+        button.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
+        
+        // Manual hover state management since CSS :hover doesn't work in CFFI modules
+        button.connect_enter_notify_event(|widget, _event| {
+            log::debug!("Button hover ENTER detected");
+            let style_context = widget.style_context();
+            style_context.add_class("hover");
+            false.into()
+        });
+        
+        button.connect_leave_notify_event(|widget, _event| {
+            log::debug!("Button hover LEAVE detected");
+            let style_context = widget.style_context();
+            style_context.remove_class("hover");
+            false.into()
+        });
 
         // Set up click handler using simpler connect_clicked signal
         let vdesk_id_for_click = vdesk.id;
@@ -63,13 +81,19 @@ impl VirtualDesktopWidget {
 
         if vdesk.focused {
             style_context.add_class("vdesk-focused");
+            log::debug!("Applied CSS class 'vdesk-focused' to button for vdesk {}", vdesk.id);
         } else {
             style_context.add_class("vdesk-unfocused");
+            log::debug!("Applied CSS class 'vdesk-unfocused' to button for vdesk {}", vdesk.id);
         }
 
-        if !vdesk.populated && !config.show_empty {
+        // Only hide if empty AND not focused AND show_empty is false
+        if !vdesk.populated && !vdesk.focused && !config.show_empty {
             style_context.add_class("hidden");
+            log::debug!("Applied CSS class 'hidden' to button for vdesk {}", vdesk.id);
         }
+        
+        log::debug!("Created new VirtualDesktopWidget for vdesk {} with text '{}'", vdesk.id, display_text);
 
         Self {
             button,
@@ -193,6 +217,7 @@ impl WidgetManager {
                     self.runtime_handle.clone(),
                 );
                 self.container.add(&widget.button);
+                widget.button.show(); // Ensure new widget is visible
                 self.widgets.insert(vdesk.id, widget);
             }
         }

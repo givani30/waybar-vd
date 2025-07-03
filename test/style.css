@@ -1,4 +1,4 @@
-/* Virtual Desktop CFFI Test Styling - Button-based Implementation */
+/* Virtual Desktop CFFI Module - Manual Hover State Management */
 
 /* Material You Color Scheme */
 * {
@@ -25,7 +25,7 @@ window#waybar {
     padding: 0px 5px;
 }
 
-/* CRITICAL: Reset default button styles to make them look like simple labels */
+/* CRITICAL: Reset button defaults but preserve text rendering */
 #cffi-virtual_desktops button {
     background: none;
     border: none;
@@ -33,9 +33,12 @@ window#waybar {
     padding: 2px 8px;
     margin: 0 2px;
     border-radius: 4px;
-    min-width: 0;
     color: rgba(205, 189, 255, 0.4);
     font-weight: normal;
+    transition: all 0.15s ease;
+    /* Ensure text is visible */
+    font-size: inherit;
+    font-family: inherit;
 }
 
 /* Focused desktop */
@@ -51,20 +54,22 @@ window#waybar {
     font-weight: normal;
 }
 
-/* Native hover effects - this is the key improvement! */
-#cffi-virtual_desktops button:hover {
-    background-color: rgba(205, 189, 255, 0.15);
-    color: rgba(205, 189, 255, 0.9);
-}
-
-#cffi-virtual_desktops button.vdesk-focused:hover {
-    background-color: rgba(205, 189, 255, 0.2);
+/* Manual hover effects using high specificity selectors */
+/* Use multiple class selectors for higher specificity than single class */
+#cffi-virtual_desktops button.hover.vdesk-focused {
+    background-color: rgba(205, 189, 255, 0.25);
     color: #cdbdff;
 }
 
-#cffi-virtual_desktops button.vdesk-unfocused:hover {
-    background-color: rgba(205, 189, 255, 0.1);
+#cffi-virtual_desktops button.hover.vdesk-unfocused {
+    background-color: rgba(205, 189, 255, 0.12);
     color: rgba(205, 189, 255, 0.7);
+}
+
+/* Fallback hover for any button without specific state */
+#cffi-virtual_desktops button.hover {
+    background-color: rgba(205, 189, 255, 0.15);
+    color: rgba(205, 189, 255, 0.9);
 }
 
 /* Hidden desktops */
