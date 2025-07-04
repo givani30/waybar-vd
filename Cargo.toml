@@ -1,6 +1,6 @@
 [package]
 name = "waybar-vd"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Givani Boekestijn <givaniboek@hotmail.com>"]
 description = "CFFI module for Waybar to display Hyprland virtual desktops"
