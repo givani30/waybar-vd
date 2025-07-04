@@ -8,7 +8,7 @@ use crate::errors::Result;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use waybar_cffi::gtk::{self, gdk, glib, prelude::*, Button, Box as GtkBox};
+use waybar_cffi::gtk::{self, gdk, prelude::*, Button, Box as GtkBox};
 
 /// Virtual desktop widget
 #[derive(Debug)]
@@ -92,11 +92,13 @@ impl VirtualDesktopWidget {
             log::debug!("Applied CSS class 'vdesk-unfocused' to button for vdesk {}", vdesk.id);
         }
 
-        // Set initial visibility based on configuration
+        // Set initial visibility based on configuration using GTK's built-in visibility
         let is_visible = config.show_empty || vdesk.populated || vdesk.focused;
+        log::debug!("VDesk {} visibility check: show_empty={}, populated={}, focused={} => visible={}", 
+                   vdesk.id, config.show_empty, vdesk.populated, vdesk.focused, is_visible);
+        button.set_visible(is_visible);
         if !is_visible {
-            style_context.add_class("hidden");
-            log::debug!("Applied CSS class 'hidden' to button for vdesk {}", vdesk.id);
+            log::debug!("Set GTK visibility to false for vdesk {}", vdesk.id);
         }
         
         log::debug!("Created new VirtualDesktopWidget for vdesk {} with text '{}'", vdesk.id, display_text);
@@ -141,13 +143,12 @@ impl VirtualDesktopWidget {
 
         let style_context = self.button.style_context();
 
-        // Toggle visibility class if needed
+        // Toggle GTK visibility if needed
         if was_visible != is_visible {
-            if is_visible {
-                style_context.remove_class("hidden");
-            } else {
-                style_context.add_class("hidden");
-            }
+            log::debug!("VDesk {} visibility changed: was_visible={} => is_visible={}", 
+                       vdesk.id, was_visible, is_visible);
+            self.button.set_visible(is_visible);
+            log::debug!("Set GTK visibility to {} for vdesk {}", is_visible, vdesk.id);
             updated = true;
         }
         
@@ -243,7 +244,12 @@ impl WidgetManager {
                 let correct_position = new_order.iter().position(|&id| id == vdesk.id).unwrap_or(0) as i32;
                 self.container.add(&widget.button);
                 self.container.reorder_child(&widget.button, correct_position);
-                widget.button.show();
+                
+                // Only show the widget if it should be visible according to configuration
+                let is_visible = self.config.show_empty || vdesk.populated || vdesk.focused;
+                if is_visible {
+                    widget.button.show();
+                }
                 
                 self.widgets.insert(vdesk.id, widget);
             }
@@ -272,9 +278,11 @@ impl WidgetManager {
         &self.widget_order
     }
 
-    /// Show all widgets
+    /// Refresh display - show container but respect individual widget visibility
     pub fn refresh_display(&self) {
-        self.container.show_all();
+        // Only show the container itself, not all children
+        // Individual widget visibility is managed by set_visible() calls
+        self.container.show();
     }
 
     /// Get configuration reference
@@ -343,6 +351,7 @@ impl WidgetManager {
 mod tests {
     use super::*;
     use crate::config::ModuleConfig;
+    use std::collections::HashSet;
     // Note: GTK imports would be needed for actual widget testing
 
     fn create_test_vdesk(id: u32, name: &str, focused: bool, populated: bool) -> VirtualDesktop {

@@ -96,7 +96,7 @@ fn default_retry_base_delay_ms() -> u64 {
 
 /// Main Waybar module for Hyprland virtual desktop display
 pub struct VirtualDesktopsModule {
-    widget_manager: Arc<std::sync::Mutex<WidgetManager>>,
+    _widget_manager: Arc<std::sync::Mutex<WidgetManager>>,
     _runtime: Arc<tokio::runtime::Runtime>,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     monitor_handle: Option<tokio::task::JoinHandle<()>>,
@@ -111,7 +111,7 @@ impl Module for VirtualDesktopsModule {
         let _ = env_logger::try_init();
         log::info!("waybar-vd module initializing...");
 
-        let init_start = std::time::Instant::now();
+        let _init_start = std::time::Instant::now();
         let metrics = Arc::new(PerformanceMetrics::new());
 
         // Convert string sort_by to enum
@@ -192,7 +192,7 @@ impl Module for VirtualDesktopsModule {
                 crate::monitor::resilient_monitor_loop(manager_clone, config_clone, shutdown_rx, tx)
                     .await
             {
-                log::error!("Resilient monitor loop failed: {}", e);
+                log::error!("Resilient monitor loop failed: {e}");
             }
         });
 
@@ -201,6 +201,8 @@ impl Module for VirtualDesktopsModule {
         let metrics_clone = Arc::clone(&metrics);
 
         // Create a shared reference to the widget manager
+        // Note: WidgetManager contains GTK widgets which are not Send/Sync by design
+        #[allow(clippy::arc_with_non_send_sync)]
         let widget_manager_shared = Arc::new(std::sync::Mutex::new(widget_manager));
         let widget_manager_clone = Arc::clone(&widget_manager_shared);
 
@@ -212,7 +214,7 @@ impl Module for VirtualDesktopsModule {
                 if let Ok(mut wm) = widget_manager_clone.lock() {
                     // Pass the full, unfiltered list - WidgetManager handles visibility internally
                     if let Err(e) = wm.update_widgets(&vdesks) {
-                        log::error!("Failed to update widgets: {}", e);
+                        log::error!("Failed to update widgets: {e}");
                         metrics_clone.record_ipc_error();
                     }
                     wm.refresh_display();
@@ -221,7 +223,7 @@ impl Module for VirtualDesktopsModule {
         });
 
         Self {
-            widget_manager: widget_manager_shared,
+            _widget_manager: widget_manager_shared,
             _runtime: rt,
             shutdown_tx: Some(shutdown_tx),
             monitor_handle: Some(monitor_handle),
