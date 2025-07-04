@@ -308,6 +308,11 @@ impl WidgetManager {
         self.container.show_all();
     }
 
+    /// Get configuration reference
+    pub fn config(&self) -> &ModuleConfig {
+        &self.config
+    }
+
     /// Optimized widget reordering with O(k) complexity where k = number of changed positions
     /// This minimizes GTK reorder operations and reduces visual flicker
     fn optimize_widget_reordering(&mut self, new_order: Vec<u32>) -> Result<()> {
