@@ -20,6 +20,7 @@ pub struct VirtualDesktopWidget {
     pub display_text: String,
     pub tooltip_text: String,
     pub focused: bool,
+    pub populated: bool,
 }
 
 impl VirtualDesktopWidget {
@@ -102,6 +103,7 @@ impl VirtualDesktopWidget {
             display_text,
             tooltip_text,
             focused: vdesk.focused,
+            populated: vdesk.populated,
         }
     }
 
@@ -140,6 +142,22 @@ impl VirtualDesktopWidget {
                 style_context.add_class("vdesk-unfocused");
             }
             self.focused = vdesk.focused;
+            updated = true;
+        }
+
+        // Update visibility based on populated status
+        if self.populated != vdesk.populated {
+            log::debug!(
+                "vdesk {} populated state changed from {} to {}",
+                vdesk.id, self.populated, vdesk.populated
+            );
+            let style_context = self.button.style_context();
+            if !vdesk.populated && !vdesk.focused {
+                style_context.add_class("hidden");
+            } else {
+                style_context.remove_class("hidden");
+            }
+            self.populated = vdesk.populated;
             updated = true;
         }
 
@@ -237,7 +255,16 @@ impl WidgetManager {
                 let style_context = widget.button.style_context();
                 style_context.add_class("creating");
                 
+
+                                // Determine the correct position from the new_order vector
+                let correct_position = new_order.iter()
+                    .position(|&id| id == vdesk.id)
+                    .unwrap_or(self.container.children().len()) as i32;
+                
+                // Add the widget to the container and immediately reorder it
                 self.container.add(&widget.button);
+                self.container.reorder_child(&widget.button, correct_position);
+                
                 widget.button.show();
                 
                 // Trigger fade-in animation after a brief delay
@@ -417,6 +444,16 @@ mod tests {
         );
         assert!(updated);
         assert!(widget.focused);
+
+        // Test populated change
+        let unpopulated_vdesk = VirtualDesktop { populated: false, ..focused_vdesk };
+        let updated = widget.update_if_changed(
+            &unpopulated_vdesk,
+            "New Text".to_string(),
+            "Tooltip".to_string(),
+        );
+        assert!(updated);
+        assert!(!widget.populated);
     }
 
     #[tokio::test]

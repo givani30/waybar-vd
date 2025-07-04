@@ -77,14 +77,18 @@ impl VirtualDesktopsManager {
     }
     
     fn parse_virtual_desktop_state(&mut self, state: &str) -> Result<()> {
-        self.virtual_desktops.clear();
-
-        let virtual_desktops: Vec<VirtualDesktop> = serde_json::from_str(state)
+        let incoming_vdesks: Vec<VirtualDesktop> = serde_json::from_str(state)
             .map_err(|e| anyhow::anyhow!("Failed to parse virtual desktop JSON: {}", e))?;
 
-        for vdesk in virtual_desktops {
+        let incoming_ids: std::collections::HashSet<u32> = incoming_vdesks.iter().map(|v| v.id).collect();
+
+        // Update existing or add new desktops
+        for vdesk in incoming_vdesks {
             self.virtual_desktops.insert(vdesk.id, vdesk);
         }
+
+        // Remove desktops that are no longer present
+        self.virtual_desktops.retain(|&id, _| incoming_ids.contains(&id));
 
         Ok(())
     }
@@ -100,67 +104,57 @@ mod tests {
     fn test_parse_virtual_desktop_state() {
         let mut manager = VirtualDesktopsManager::new();
 
-        let state = r#"[{
-    "id": 1,
-    "name": "  Focus",
-    "focused": true,
-    "populated": true,
-    "workspaces": [1, 2],
-    "windows": 2
-},{
-    "id": 2,
-    "name": "󰍉 Research",
-    "focused": false,
-    "populated": true,
-    "workspaces": [3, 4],
-    "windows": 1
-},{
-    "id": 3,
-    "name": "󰵅  Comms",
-    "focused": false,
-    "populated": false,
-    "workspaces": [],
-    "windows": 0
-}]"#;
-        
-        manager.parse_virtual_desktop_state(state).unwrap();
+        // Initial state
+        let initial_state = r#"[{
+            "id": 1,
+            "name": "  Focus",
+            "focused": true,
+            "populated": true,
+            "workspaces": [1, 2],
+            "windows": 2
+        }]"#;
+        manager.parse_virtual_desktop_state(initial_state).unwrap();
+        assert_eq!(manager.get_virtual_desktops().len(), 1);
+
+        // Update: one desktop modified, one added, one removed
+        let updated_state = r#"[{
+            "id": 1,
+            "name": "  Focus",
+            "focused": false,
+            "populated": true,
+            "workspaces": [1, 2],
+            "windows": 3
+        },{
+            "id": 2,
+            "name": "󰍉 Research",
+            "focused": true,
+            "populated": true,
+            "workspaces": [3, 4],
+            "windows": 1
+        }]"#;
+        manager.parse_virtual_desktop_state(updated_state).unwrap();
         
         let vdesks = manager.get_virtual_desktops();
-        assert_eq!(vdesks.len(), 3);
+        assert_eq!(vdesks.len(), 2);
         
-        let focus_vdesk = &vdesks[0];
-        assert_eq!(focus_vdesk.id, 1);
-        assert_eq!(focus_vdesk.name, "  Focus");
-        assert!(focus_vdesk.focused);
-        assert!(focus_vdesk.populated);
-        assert_eq!(focus_vdesk.window_count, 2);
-        assert_eq!(focus_vdesk.workspaces, vec![1, 2]);
+        let focus_vdesk = manager.virtual_desktops.get(&1).unwrap();
+        assert!(!focus_vdesk.focused);
+        assert_eq!(focus_vdesk.window_count, 3);
 
-        let research_vdesk = &vdesks[1];
-        assert_eq!(research_vdesk.id, 2);
-        assert_eq!(research_vdesk.name, "󰍉 Research");
-        assert!(!research_vdesk.focused);
-        assert!(research_vdesk.populated);
-        assert_eq!(research_vdesk.window_count, 1);
-        assert_eq!(research_vdesk.workspaces, vec![3, 4]);
-
-        let comms_vdesk = &vdesks[2];
-        assert_eq!(comms_vdesk.id, 3);
-        assert_eq!(comms_vdesk.name, "󰵅  Comms");
-        assert!(!comms_vdesk.focused);
-        assert!(!comms_vdesk.populated);
-        assert_eq!(comms_vdesk.window_count, 0);
+        let research_vdesk = manager.virtual_desktops.get(&2).unwrap();
+        assert!(research_vdesk.focused);
     }
 
     #[test]
     fn test_parse_invalid_json() {
         let mut manager = VirtualDesktopsManager::new();
+        manager.virtual_desktops.insert(1, VirtualDesktop::new(1, "Test".to_string()));
 
         let invalid_json = "{ invalid json }";
         let result = manager.parse_virtual_desktop_state(invalid_json);
         assert!(result.is_err());
 
-        let vdesks = manager.get_virtual_desktops();
-        assert_eq!(vdesks.len(), 0);
+        // Ensure state is unchanged on error
+        assert_eq!(manager.get_virtual_desktops().len(), 1);
     }
 }

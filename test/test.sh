@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Script directory (should be in Vd_waybar/test/)
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$TEST_DIR")"
-LIBRARY_PATH="$REPO_DIR/target/release/libwaybar_vd.so"
+LIBRARY_PATH="$REPO_DIR/target/debug/libwaybar_vd.so"
 CONFIG_PATH="$TEST_DIR/waybar-config.json"
 STYLE_PATH="$TEST_DIR/style.css"
 
