@@ -6,13 +6,16 @@ use crate::hyprland::HyprlandIPC;
 use crate::vdesk::VirtualDesktopsManager;
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc};
+
+type VdeskUpdateMessage = Vec<crate::vdesk::VirtualDesktop>;
 
 /// Resilient monitoring loop
 pub async fn resilient_monitor_loop(
     manager: Arc<Mutex<VirtualDesktopsManager>>,
     config: ModuleConfig,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    tx: mpsc::Sender<VdeskUpdateMessage>,
 ) -> Result<()> {
     log::info!("Starting resilient virtual desktop monitoring...");
 
@@ -25,7 +28,7 @@ pub async fn resilient_monitor_loop(
                 log::info!("Graceful shutdown requested for monitor loop");
                 break;
             }
-            result = monitor_virtual_desktops_once(&manager, &config) => {
+            result = monitor_virtual_desktops_once(&manager, &config, tx.clone()) => {
                 match result {
                     Ok(_) => {
                         consecutive_failures = 0;
@@ -72,6 +75,7 @@ pub async fn resilient_monitor_loop(
 async fn monitor_virtual_desktops_once(
     manager: &Arc<Mutex<VirtualDesktopsManager>>,
     config: &ModuleConfig,
+    tx: mpsc::Sender<VdeskUpdateMessage>,
 ) -> Result<()> {
     log::debug!("Starting monitor cycle...");
 
@@ -93,7 +97,16 @@ async fn monitor_virtual_desktops_once(
                     if let Err(e) = mgr.update_state().await {
                         log::error!("Failed to update virtual desktop state: {}", e);
                     } else {
-                        log::debug!("Virtual desktop state updated successfully");
+                        log::debug!("Virtual desktop state updated, sending to UI thread.");
+                        // Get the new state and send it through the channel
+                        let vdesks = mgr.get_virtual_desktops();
+                        if let Err(e) = tx.send(vdesks).await {
+                            log::error!("Failed to send update to UI thread: {}. Channel closed.", e);
+                            // Channel is closed, so we should exit the loop.
+                            return Err(crate::errors::VirtualDesktopError::Internal {
+                                message: "UI channel closed".to_string(),
+                            });
+                        }
                     }
                 }
             }

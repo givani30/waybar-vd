@@ -8,7 +8,6 @@ use crate::errors::Result;
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use std::sync::Arc;
-use tokio::runtime::Handle;
 use waybar_cffi::gtk::{self, gdk, glib, prelude::*, Button, Box as GtkBox};
 use glib::ControlFlow;
 
@@ -30,7 +29,6 @@ impl VirtualDesktopWidget {
         display_text: String,
         tooltip_text: String,
         config: &ModuleConfig,
-        runtime_handle: Handle,
     ) -> Self {
         // Create Button directly with label text
         let button = Button::with_label(&display_text);
@@ -60,21 +58,27 @@ impl VirtualDesktopWidget {
         // Set up click handler using simpler connect_clicked signal
         let vdesk_id_for_click = vdesk.id;
         button.connect_clicked(move |_| {
-            let handle = runtime_handle.clone();
             let vdesk_id = vdesk_id_for_click;
 
-            // Spawn async task to handle the click
-            handle.spawn(async move {
-                match HyprlandIPC::new().await {
-                    Ok(ipc) => {
-                        if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
-                            log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
+            // Spawn a new thread to handle the async task
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                
+                rt.block_on(async move {
+                    match HyprlandIPC::new().await {
+                        Ok(ipc) => {
+                            if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
+                                log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to create Hyprland IPC for click handler: {}", e);
                         }
                     }
-                    Err(e) => {
-                        log::error!("Failed to create Hyprland IPC for click handler: {}", e);
-                    }
-                }
+                });
             });
         });
 
@@ -171,19 +175,17 @@ pub struct WidgetManager {
     widgets: BTreeMap<u32, VirtualDesktopWidget>,
     widget_order: Vec<u32>,
     config: ModuleConfig,
-    runtime_handle: Handle,
     metrics: Arc<PerformanceMetrics>,
 }
 
 impl WidgetManager {
     /// Create widget manager
-    pub fn new(container: GtkBox, config: ModuleConfig, runtime_handle: Handle, metrics: Arc<PerformanceMetrics>) -> Self {
+    pub fn new(container: GtkBox, config: ModuleConfig, metrics: Arc<PerformanceMetrics>) -> Self {
         Self {
             container,
             widgets: BTreeMap::new(),
             widget_order: Vec::new(),
             config,
-            runtime_handle,
             metrics,
         }
     }
@@ -248,7 +250,6 @@ impl WidgetManager {
                     display_text,
                     tooltip_text,
                     &self.config,
-                    self.runtime_handle.clone(),
                 );
                 
                 // Start with creating animation state
@@ -385,8 +386,6 @@ mod tests {
     #[ignore] // Requires GTK initialization
     fn test_widget_creation() {
         let config = ModuleConfig::default();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle().clone();
 
         let vdesk = create_test_vdesk(1, "Test Desktop", true, true);
         let widget = VirtualDesktopWidget::new(
@@ -394,7 +393,6 @@ mod tests {
             "Test Desktop".to_string(),
             "Virtual Desktop 1: Test Desktop".to_string(),
             &config,
-            handle,
         );
 
         assert_eq!(widget.vdesk_id, 1);
@@ -406,8 +404,6 @@ mod tests {
     #[ignore] // Requires GTK initialization
     fn test_widget_update_detection() {
         let config = ModuleConfig::default();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle().clone();
 
         let vdesk = create_test_vdesk(1, "Test Desktop", false, true);
         let mut widget = VirtualDesktopWidget::new(
@@ -415,7 +411,6 @@ mod tests {
             "Test Desktop".to_string(),
             "Tooltip".to_string(),
             &config,
-            handle,
         );
 
         // Test no change
@@ -459,7 +454,6 @@ mod tests {
     #[tokio::test]
     async fn test_widget_manager_updates() {
         let _config = ModuleConfig::default();
-        let _runtime_handle = tokio::runtime::Handle::current();
         
         // Note: This would need GTK initialization in a real test environment
         // For now, we test the logic without actual GTK widgets
