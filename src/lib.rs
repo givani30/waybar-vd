@@ -210,16 +210,8 @@ impl Module for VirtualDesktopsModule {
 
                 // This code now runs on the main UI thread without blocking
                 if let Ok(mut wm) = widget_manager_clone.lock() {
-                    // Filter the desktops for visibility based on configuration
-                    let visible_vdesks: Vec<_> = vdesks
-                        .into_iter()
-                        .filter(|vdesk| {
-                            // Show if: show_empty is true OR desktop is populated OR desktop is focused
-                            wm.config().show_empty || vdesk.populated || vdesk.focused
-                        })
-                        .collect();
-
-                    if let Err(e) = wm.update_widgets(&visible_vdesks) {
+                    // Pass the full, unfiltered list - WidgetManager handles visibility internally
+                    if let Err(e) = wm.update_widgets(&vdesks) {
                         log::error!("Failed to update widgets: {}", e);
                         metrics_clone.record_ipc_error();
                     }

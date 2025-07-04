@@ -1,15 +1,14 @@
 //! GTK widget management for virtual desktop display
 
-use crate::config::ModuleConfig;
+use crate::config::{ModuleConfig, SortStrategy};
 use crate::hyprland::HyprlandIPC;
 use crate::metrics::PerformanceMetrics;
 use crate::vdesk::VirtualDesktop;
 use crate::errors::Result;
 
-use std::collections::{BTreeMap, HashSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use waybar_cffi::gtk::{self, gdk, glib, prelude::*, Button, Box as GtkBox};
-use glib::ControlFlow;
 
 /// Virtual desktop widget
 #[derive(Debug)]
@@ -93,8 +92,9 @@ impl VirtualDesktopWidget {
             log::debug!("Applied CSS class 'vdesk-unfocused' to button for vdesk {}", vdesk.id);
         }
 
-        // Only hide if empty AND not focused AND show_empty is false
-        if !vdesk.populated && !vdesk.focused && !config.show_empty {
+        // Set initial visibility based on configuration
+        let is_visible = config.show_empty || vdesk.populated || vdesk.focused;
+        if !is_visible {
             style_context.add_class("hidden");
             log::debug!("Applied CSS class 'hidden' to button for vdesk {}", vdesk.id);
         }
@@ -117,6 +117,7 @@ impl VirtualDesktopWidget {
         vdesk: &VirtualDesktop,
         display_text: String,
         tooltip_text: String,
+        config: &ModuleConfig,
     ) -> bool {
         let mut updated = false;
 
@@ -134,10 +135,24 @@ impl VirtualDesktopWidget {
             updated = true;
         }
 
-        // Update CSS classes if focus state changed
-        if self.focused != vdesk.focused {
-            let style_context = self.button.style_context();
+        // Determine old and new visibility states
+        let was_visible = config.show_empty || self.populated || self.focused;
+        let is_visible = config.show_empty || vdesk.populated || vdesk.focused;
 
+        let style_context = self.button.style_context();
+
+        // Toggle visibility class if needed
+        if was_visible != is_visible {
+            if is_visible {
+                style_context.remove_class("hidden");
+            } else {
+                style_context.add_class("hidden");
+            }
+            updated = true;
+        }
+        
+        // Toggle focus class if needed
+        if self.focused != vdesk.focused {
             if vdesk.focused {
                 style_context.remove_class("vdesk-unfocused");
                 style_context.add_class("vdesk-focused");
@@ -145,25 +160,12 @@ impl VirtualDesktopWidget {
                 style_context.remove_class("vdesk-focused");
                 style_context.add_class("vdesk-unfocused");
             }
-            self.focused = vdesk.focused;
             updated = true;
         }
-
-        // Update visibility based on populated status
-        if self.populated != vdesk.populated {
-            log::debug!(
-                "vdesk {} populated state changed from {} to {}",
-                vdesk.id, self.populated, vdesk.populated
-            );
-            let style_context = self.button.style_context();
-            if !vdesk.populated && !vdesk.focused {
-                style_context.add_class("hidden");
-            } else {
-                style_context.remove_class("hidden");
-            }
-            self.populated = vdesk.populated;
-            updated = true;
-        }
+        
+        // Update internal state for the next cycle
+        self.focused = vdesk.focused;
+        self.populated = vdesk.populated;
 
         updated
     }
@@ -190,97 +192,64 @@ impl WidgetManager {
         }
     }
 
-    /// Update widgets
-    pub fn update_widgets(&mut self, visible_vdesks: &[VirtualDesktop]) -> Result<()> {
-        // Create visibility lookup
-        let visible_ids: HashSet<u32> = visible_vdesks.iter().map(|vd| vd.id).collect();
+    /// Update widgets with full desktop list - handles sorting and visibility internally
+    pub fn update_widgets(&mut self, all_vdesks: &[VirtualDesktop]) -> Result<()> {
+        // 1. Create a mutable copy to sort
+        let mut sorted_vdesks = all_vdesks.to_vec();
 
-        // Remove widgets for hidden virtual desktops
-        let widgets_to_remove: Vec<u32> = self.widgets.keys()
-            .filter(|&id| !visible_ids.contains(id))
-            .copied()
-            .collect();
-
-        // Animate widget destruction with fade-out
-        for widget_id in widgets_to_remove {
-            if let Some(widget) = self.widgets.get(&widget_id) {
-                let style_context = widget.button.style_context();
-                style_context.add_class("destroying");
-                
-                // Remove widget after animation completes
-                let container_clone = self.container.clone();
-                let button_clone = widget.button.clone();
-                let _widget_id_copy = widget_id;
-                
-                glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
-                    container_clone.remove(&button_clone);
-                    ControlFlow::Break
-                });
+        // 2. Sort the full list of desktops according to the configured strategy
+        match self.config.sort_by {
+            SortStrategy::Number => {
+                // The default sort from Hyprland is by number, so we do nothing
             }
-            
-            // Remove from our tracking immediately
-            self.widgets.remove(&widget_id);
-            self.widget_order.retain(|&id| id != widget_id);
+            SortStrategy::Name => {
+                sorted_vdesks.sort_by(|a, b| a.name.cmp(&b.name));
+            }
+            SortStrategy::FocusedFirst => {
+                // Move the focused desktop to the front
+                if let Some(pos) = sorted_vdesks.iter().position(|vd| vd.focused) {
+                    let focused = sorted_vdesks.remove(pos);
+                    sorted_vdesks.insert(0, focused);
+                }
+            }
         }
+        
+        // 3. Generate the new widget order from the sorted list
+        let new_order: Vec<u32> = sorted_vdesks.iter().map(|vd| vd.id).collect();
 
-        // Update or create widgets for visible virtual desktops
-        let mut new_order = Vec::with_capacity(visible_vdesks.len());
-
-        for vdesk in visible_vdesks {
-            new_order.push(vdesk.id);
-
+        // 4. Iterate through all desktops to update or create widgets
+        for vdesk in &sorted_vdesks {
             let display_text = self.config.format_virtual_desktop(
                 &vdesk.name,
                 vdesk.id,
-                vdesk.window_count
+                vdesk.window_count,
             );
 
             let tooltip_text = self.config.format_tooltip(
                 &vdesk.name,
                 vdesk.id,
                 vdesk.window_count,
-                vdesk.focused
+                vdesk.focused,
             );
 
             if let Some(existing_widget) = self.widgets.get_mut(&vdesk.id) {
-                existing_widget.update_if_changed(vdesk, display_text, tooltip_text);
+                // Widget exists, just update its state (including visibility)
+                existing_widget.update_if_changed(vdesk, display_text, tooltip_text, &self.config);
             } else {
-                let widget = VirtualDesktopWidget::new(
-                    vdesk,
-                    display_text,
-                    tooltip_text,
-                    &self.config,
-                );
+                // Widget does not exist, create it (this will happen on first launch)
+                let widget = VirtualDesktopWidget::new(vdesk, display_text, tooltip_text, &self.config);
                 
-                // Start with creating animation state
-                let style_context = widget.button.style_context();
-                style_context.add_class("creating");
-                
-
-                                // Determine the correct position from the new_order vector
-                let correct_position = new_order.iter()
-                    .position(|&id| id == vdesk.id)
-                    .unwrap_or(self.container.children().len()) as i32;
-                
-                // Add the widget to the container and immediately reorder it
+                // Add and position the new widget correctly
+                let correct_position = new_order.iter().position(|&id| id == vdesk.id).unwrap_or(0) as i32;
                 self.container.add(&widget.button);
                 self.container.reorder_child(&widget.button, correct_position);
-                
                 widget.button.show();
-                
-                // Trigger fade-in animation after a brief delay
-                let button_clone = widget.button.clone();
-                glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-                    let style_context = button_clone.style_context();
-                    style_context.remove_class("creating");
-                    ControlFlow::Break
-                });
                 
                 self.widgets.insert(vdesk.id, widget);
             }
         }
 
-        // Reorder widgets if sequence changed (optimized for O(k) complexity)
+        // 5. Physically reorder the GTK widgets if the sorted order has changed
         if new_order != self.widget_order {
             self.optimize_widget_reordering(new_order)?;
         }
@@ -423,6 +392,7 @@ mod tests {
             &vdesk,
             "Test Desktop".to_string(),
             "Tooltip".to_string(),
+            &config,
         );
         assert!(!updated);
 
@@ -431,6 +401,7 @@ mod tests {
             &vdesk,
             "New Text".to_string(),
             "Tooltip".to_string(),
+            &config,
         );
         assert!(updated);
         assert_eq!(widget.display_text, "New Text");
@@ -441,6 +412,7 @@ mod tests {
             &focused_vdesk,
             "New Text".to_string(),
             "Tooltip".to_string(),
+            &config,
         );
         assert!(updated);
         assert!(widget.focused);
@@ -451,6 +423,7 @@ mod tests {
             &unpopulated_vdesk,
             "New Text".to_string(),
             "Tooltip".to_string(),
+            &config,
         );
         assert!(updated);
         assert!(!widget.populated);
