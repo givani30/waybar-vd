@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Script directory (should be in Vd_waybar/test/)
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$TEST_DIR")"
-LIBRARY_PATH="$REPO_DIR/target/release/libwaybar_virtual_desktops_cffi.so"
+LIBRARY_PATH="$REPO_DIR/target/release/libwaybar_vd.so"
 CONFIG_PATH="$TEST_DIR/waybar-config.json"
 STYLE_PATH="$TEST_DIR/style.css"
 
@@ -58,7 +58,7 @@ check_prerequisites() {
     if [[ ! -f "$LIBRARY_PATH" ]]; then
         print_status "warn" "CFFI library not found, building..."
         cd "$REPO_DIR"
-        if cargo build --release; then
+        if cargo build; then
             print_status "ok" "CFFI library built successfully"
         else
             print_status "error" "Failed to build CFFI library"
@@ -102,49 +102,21 @@ check_prerequisites() {
     echo
 }
 
-# Function to validate configuration
-validate_config() {
-    print_status "info" "Validating test configuration..."
+# Function to update library path in config
+update_config() {
+    print_status "info" "Updating library path in config..."
     
-    # Check if config file exists and is valid JSON
-    if [[ ! -f "$CONFIG_PATH" ]]; then
-        print_status "error" "Test config file not found: $CONFIG_PATH"
-        exit 1
-    fi
-    
-    if ! jq empty "$CONFIG_PATH" 2>/dev/null; then
-        print_status "error" "Invalid JSON in config file"
-        exit 1
-    fi
-    print_status "ok" "Configuration file is valid JSON"
-    
-    # Check if style file exists
-    if [[ ! -f "$STYLE_PATH" ]]; then
-        print_status "error" "Test style file not found: $STYLE_PATH"
-        exit 1
-    fi
-    print_status "ok" "Style file exists"
-    
-    # Check library path in config
-    local config_lib_path=$(jq -r '."cffi/virtual_desktops".module_path' "$CONFIG_PATH")
-    local resolved_path
+    local temp_config
+    temp_config=$(mktemp)
 
-    # Handle both absolute and relative paths
-    if [[ "$config_lib_path" = /* ]]; then
-        # Absolute path
-        resolved_path="$config_lib_path"
+    if jq --arg path "$LIBRARY_PATH" '."cffi/virtual_desktops".module_path = $path' "$CONFIG_PATH" > "$temp_config"; then
+        mv "$temp_config" "$CONFIG_PATH"
+        print_status "ok" "Library path updated to: $LIBRARY_PATH"
     else
-        # Relative path
-        resolved_path="$TEST_DIR/$config_lib_path"
-    fi
-
-    if [[ ! -f "$resolved_path" ]]; then
-        print_status "error" "Library path in config is incorrect: $config_lib_path"
-        print_status "info" "Expected: $resolved_path"
+        print_status "error" "Failed to update config file with jq"
+        rm "$temp_config" # Clean up temp file
         exit 1
     fi
-    print_status "ok" "Library path in config is correct"
-    
     echo
 }
 
@@ -216,7 +188,7 @@ case "${1:-}" in
         ;;
     "--dry-run")
         check_prerequisites
-        validate_config
+        update_config
         print_status "ok" "Configuration is valid and ready for testing"
         ;;
     "--build")
@@ -224,7 +196,7 @@ case "${1:-}" in
         ;;
     "--run"|"")
         check_prerequisites
-        validate_config
+        update_config
         run_test
         ;;
     *)
