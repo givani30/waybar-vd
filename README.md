@@ -243,12 +243,12 @@ The module uses GTK Button widgets and applies CSS classes for comprehensive sty
 
 ```css
 /* Virtual Desktop Module Container */
-#cffi-virtual-desktops {
+#waybar-vd {
     padding: 0px 5px;
 }
 
 /* Reset button defaults for clean styling */
-#cffi-virtual-desktops button {
+#waybar-vd button {
     background: none;
     border: none;
     box-shadow: none;
@@ -264,47 +264,47 @@ The module uses GTK Button widgets and applies CSS classes for comprehensive sty
 }
 
 /* Focused Virtual Desktop */
-#cffi-virtual-desktops button.vdesk-focused {
+#waybar-vd button.vdesk-focused {
     color: #cdbdff;
     font-weight: bold;
     background-color: rgba(205, 189, 255, 0.1);
 }
 
 /* Unfocused Virtual Desktop */
-#cffi-virtual-desktops button.vdesk-unfocused {
+#waybar-vd button.vdesk-unfocused {
     color: rgba(205, 189, 255, 0.3);
     font-weight: normal;
 }
 
 /* Manual Hover Effects (CSS :hover doesn't work in CFFI modules) */
-#cffi-virtual-desktops button.hover {
+#waybar-vd button.hover {
     background-color: rgba(205, 189, 255, 0.15);
     color: rgba(205, 189, 255, 0.9);
 }
 
-#cffi-virtual-desktops button.hover.vdesk-focused {
+#waybar-vd button.hover.vdesk-focused {
     background-color: rgba(205, 189, 255, 0.25);
     color: #cdbdff;
 }
 
-#cffi-virtual-desktops button.hover.vdesk-unfocused {
+#waybar-vd button.hover.vdesk-unfocused {
     background-color: rgba(205, 189, 255, 0.12);
     color: rgba(205, 189, 255, 0.7);
 }
 
 /* Animation States */
-#cffi-virtual-desktops button.creating {
+#waybar-vd button.creating {
     opacity: 0;
 }
 
-#cffi-virtual-desktops button.destroying {
+#waybar-vd button.destroying {
     opacity: 0;
     padding: 0;
     margin: 0;
 }
 
 /* Hidden Virtual Desktops */
-#cffi-virtual-desktops button.hidden {
+#waybar-vd button.hidden {
     opacity: 0;
     padding: 0;
     margin: 0;

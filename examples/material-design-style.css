@@ -11,12 +11,12 @@
 @import "colors.css";
 
 /* Virtual Desktop Module Container */
-#cffi-virtual_desktops {
+#waybar-vd {
     padding: 0px 5px;
 }
 
 /* Reset button defaults for clean styling */
-#cffi-virtual_desktops button {
+#waybar-vd button {
     background: none;
     border: none;
     box-shadow: none;
@@ -32,39 +32,39 @@
 }
 
 /* Focused Virtual Desktop */
-#cffi-virtual_desktops button.vdesk-focused {
+#waybar-vd button.vdesk-focused {
     color: @primary;
     font-weight: bold;
 }
 
 /* Unfocused Virtual Desktop */
-#cffi-virtual_desktops button.vdesk-unfocused {
+#waybar-vd button.vdesk-unfocused {
     color: @outline;
     font-weight: normal;
 }
 
 /* Manual Hover Effects (CSS :hover doesn't work in CFFI modules) */
-#cffi-virtual_desktops button.hover.vdesk-focused {
+#waybar-vd button.hover.vdesk-focused {
     color: @primary;
 }
 
-#cffi-virtual_desktops button.hover.vdesk-unfocused {
+#waybar-vd button.hover.vdesk-unfocused {
     color: @on_surface_variant;
 }
 
 /* Animation States */
-#cffi-virtual_desktops button.creating {
+#waybar-vd button.creating {
     opacity: 0;
 }
 
-#cffi-virtual_desktops button.destroying {
+#waybar-vd button.destroying {
     opacity: 0;
     padding: 0;
     margin: 0;
 }
 
 /* Hidden Virtual Desktops */
-#cffi-virtual_desktops button.hidden {
+#waybar-vd button.hidden {
     opacity: 0;
     padding: 0;
     margin: 0;
@@ -73,12 +73,12 @@
 /* Alternative color schemes for different Matugen themes:
  * 
  * For warmer themes, you might prefer:
- * #cffi-virtual_desktops button {
+ * #waybar-vd button {
  *     color: rgba(255, 180, 150, 0.4);
  * }
  * 
  * For cooler themes, you might prefer:
- * #cffi-virtual_desktops button {
+ * #waybar-vd button {
  *     color: rgba(150, 180, 255, 0.4);
  * }
  */

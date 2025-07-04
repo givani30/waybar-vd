@@ -6,13 +6,13 @@
 @import "colors.css";
 
 /* Minimal Virtual Desktop Module Container */
-#cffi-virtual_desktops {
+#waybar-vd {
     padding: 0px 3px;
     background: transparent;
 }
 
 /* Minimal button styling - clean and simple */
-#cffi-virtual_desktops button {
+#waybar-vd button {
     background: none;
     border: none;
     box-shadow: none;
@@ -28,7 +28,7 @@
 }
 
 /* Focused Virtual Desktop - minimal highlight with underline */
-#cffi-virtual_desktops button.vdesk-focused {
+#waybar-vd button.vdesk-focused {
     color: #fff;
     font-weight: bold;
     background: none;
@@ -36,22 +36,22 @@
 }
 
 /* Unfocused Virtual Desktop - subtle gray */
-#cffi-virtual_desktops button.vdesk-unfocused {
+#waybar-vd button.vdesk-unfocused {
     color: #888;
     font-weight: normal;
 }
 
 /* Minimal hover effects */
-#cffi-virtual_desktops button.hover.vdesk-focused {
+#waybar-vd button.hover.vdesk-focused {
     color: #fff;
 }
 
-#cffi-virtual_desktops button.hover.vdesk-unfocused {
+#waybar-vd button.hover.vdesk-unfocused {
     color: #bbb;
 }
 
 /* Hidden Virtual Desktops */
-#cffi-virtual_desktops button.hidden {
+#waybar-vd button.hidden {
     opacity: 0;
     padding: 0;
     margin: 0;
