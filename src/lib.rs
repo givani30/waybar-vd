@@ -6,9 +6,9 @@ use std::thread;
 
 use anyhow::Result;
 use serde::Deserialize;
-use tokio::runtime::Handle;
+use tokio::sync::mpsc;
 use waybar_cffi::{
-    gtk::{prelude::*, Box as GtkBox, Orientation},
+    gtk::{prelude::*, Box as GtkBox, Orientation, glib},
     waybar_module, InitInfo, Module,
 };
 
@@ -25,6 +25,8 @@ use hyprland::HyprlandIPC;
 use metrics::PerformanceMetrics;
 use ui::WidgetManager;
 use vdesk::VirtualDesktopsManager;
+
+type VdeskUpdateMessage = Vec<vdesk::VirtualDesktop>;
 
 /// Configuration wrapper supporting both nested and direct formats
 #[derive(Deserialize)]
@@ -92,16 +94,14 @@ fn default_retry_base_delay_ms() -> u64 {
     500
 }
 
-
 /// Main Waybar module for Hyprland virtual desktop display
 pub struct VirtualDesktopsModule {
-    widget_manager: WidgetManager,
-    manager: Arc<tokio::sync::Mutex<VirtualDesktopsManager>>,
-    runtime_handle: Handle,
+    _widget_manager: Arc<std::sync::Mutex<WidgetManager>>,
     _runtime: Arc<tokio::runtime::Runtime>,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     monitor_handle: Option<tokio::task::JoinHandle<()>>,
     metrics: Arc<PerformanceMetrics>,
+    _update_handle: glib::JoinHandle<()>,
 }
 
 impl Module for VirtualDesktopsModule {
@@ -111,15 +111,18 @@ impl Module for VirtualDesktopsModule {
         let _ = env_logger::try_init();
         log::info!("waybar-vd module initializing...");
 
-        let init_start = std::time::Instant::now();
+        let _init_start = std::time::Instant::now();
         let metrics = Arc::new(PerformanceMetrics::new());
 
         // Convert string sort_by to enum
-        let sort_by = config.sort_by.parse()
-            .unwrap_or_else(|e| {
-                log::warn!("Invalid sort_by value '{}': {}. Using default.", config.sort_by, e);
-                crate::config::SortStrategy::default()
-            });
+        let sort_by = config.sort_by.parse().unwrap_or_else(|e| {
+            log::warn!(
+                "Invalid sort_by value '{}': {}. Using default.",
+                config.sort_by,
+                e
+            );
+            crate::config::SortStrategy::default()
+        });
 
         let module_config = ModuleConfig {
             format: config.format,
@@ -137,7 +140,11 @@ impl Module for VirtualDesktopsModule {
             panic!("Invalid configuration: {}", e);
         }
 
-        log::debug!("Module config: format={}, show_empty={}", module_config.format, module_config.show_empty);
+        log::debug!(
+            "Module config: format={}, show_empty={}",
+            module_config.format,
+            module_config.show_empty
+        );
         let container = info.get_root_widget();
         let hbox = GtkBox::new(Orientation::Horizontal, 0);
 
@@ -147,58 +154,87 @@ impl Module for VirtualDesktopsModule {
         container.add(&hbox);
         log::debug!("Created GTK container widget with CSS name 'waybar-vd'");
 
-        let rt = Arc::new(tokio::runtime::Runtime::new()
-            .expect("Failed to create Tokio runtime"));
+        let rt = Arc::new(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"));
         let runtime_handle = rt.handle().clone();
         let manager = Arc::new(tokio::sync::Mutex::new(VirtualDesktopsManager::new()));
+
+        let (tx, mut rx) = mpsc::channel::<VdeskUpdateMessage>(32);
+
         {
             let manager_for_init = Arc::clone(&manager);
-            let handle = runtime_handle.clone();
+            let tx_for_init = tx.clone();
             thread::spawn(move || {
-                handle.block_on(async {
-                    match manager_for_init.lock().await.initialize().await {
-                        Ok(_) => log::debug!("Virtual desktop manager initialized successfully"),
-                        Err(e) => log::error!("Failed to initialize virtual desktop manager: {}", e),
+                runtime_handle.block_on(async {
+                    let mut mgr = manager_for_init.lock().await;
+                    if let Err(e) = mgr.initialize().await {
+                        log::error!("Failed to initialize virtual desktop manager: {}", e);
+                        return;
+                    }
+                    // Send the initial state immediately
+                    let initial_state = mgr.get_virtual_desktops();
+                    if let Err(e) = tx_for_init.send(initial_state).await {
+                        log::error!("Failed to send initial state: {}", e);
                     }
                 });
-            }).join().unwrap_or_else(|_| {
+            })
+            .join()
+            .unwrap_or_else(|_| {
                 log::error!("Failed to join initialization thread");
             });
         }
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let widget_manager = WidgetManager::new(hbox, module_config.clone(), runtime_handle.clone(), Arc::clone(&metrics));
         let manager_clone = Arc::clone(&manager);
         let config_clone = module_config.clone();
-        let monitor_handle = runtime_handle.spawn(async move {
-            if let Err(e) = crate::monitor::resilient_monitor_loop(manager_clone, config_clone, shutdown_rx).await {
-                log::error!("Resilient monitor loop failed: {}", e);
+        let monitor_handle = rt.handle().spawn(async move {
+            // Pass the transmitter `tx` to the monitor loop
+            if let Err(e) =
+                crate::monitor::resilient_monitor_loop(manager_clone, config_clone, shutdown_rx, tx)
+                    .await
+            {
+                log::error!("Resilient monitor loop failed: {e}");
             }
         });
 
-        let mut module = Self {
-            widget_manager,
-            manager,
-            runtime_handle,
+        let widget_manager =
+            WidgetManager::new(hbox, module_config.clone(), Arc::clone(&metrics));
+        let metrics_clone = Arc::clone(&metrics);
+
+        // Create a shared reference to the widget manager
+        // Note: WidgetManager contains GTK widgets which are not Send/Sync by design
+        #[allow(clippy::arc_with_non_send_sync)]
+        let widget_manager_shared = Arc::new(std::sync::Mutex::new(widget_manager));
+        let widget_manager_clone = Arc::clone(&widget_manager_shared);
+
+        let update_handle = glib::MainContext::default().spawn_local(async move {
+            while let Some(vdesks) = rx.recv().await {
+                let _timer = metrics_clone.start_widget_update_timer(Arc::clone(&metrics_clone));
+
+                // This code now runs on the main UI thread without blocking
+                if let Ok(mut wm) = widget_manager_clone.lock() {
+                    // Pass the full, unfiltered list - WidgetManager handles visibility internally
+                    if let Err(e) = wm.update_widgets(&vdesks) {
+                        log::error!("Failed to update widgets: {e}");
+                        metrics_clone.record_ipc_error();
+                    }
+                    wm.refresh_display();
+                }
+            }
+        });
+
+        Self {
+            _widget_manager: widget_manager_shared,
             _runtime: rt,
             shutdown_tx: Some(shutdown_tx),
             monitor_handle: Some(monitor_handle),
             metrics: Arc::clone(&metrics),
-        };
-
-        log::debug!("Performing initial update");
-        module.update();
-
-        // Record startup completion
-        let startup_duration = init_start.elapsed();
-
-        log::info!("waybar-vd module initialized successfully in {:.2}ms",
-                  startup_duration.as_millis());
-        module
+            _update_handle: update_handle, // Store the handle
+        }
     }
 
     fn update(&mut self) {
-        self.update_display();
+        // Updates are now event-driven through channels
+        log::debug!("Manual update triggered, but updates are now event-driven.");
     }
 
     fn refresh(&mut self, _signal: i32) {
@@ -223,19 +259,20 @@ impl Drop for VirtualDesktopsModule {
         }
 
         if let Some(monitor_handle) = self.monitor_handle.take() {
-            let rt_handle = self.runtime_handle.clone();
+            let rt_handle = self._runtime.handle().clone();
             std::thread::spawn(move || {
                 rt_handle.block_on(async {
-                    match tokio::time::timeout(
-                        tokio::time::Duration::from_secs(5),
-                        monitor_handle
-                    ).await {
+                    match tokio::time::timeout(tokio::time::Duration::from_secs(5), monitor_handle)
+                        .await
+                    {
                         Ok(Ok(())) => log::debug!("Monitor task completed gracefully"),
                         Ok(Err(e)) => log::warn!("Monitor task completed with error: {}", e),
                         Err(_) => log::warn!("Monitor task shutdown timed out"),
                     }
                 });
-            }).join().unwrap_or_else(|_| {
+            })
+            .join()
+            .unwrap_or_else(|_| {
                 log::error!("Failed to join shutdown thread");
             });
         }
@@ -249,25 +286,7 @@ impl Drop for VirtualDesktopsModule {
 }
 
 impl VirtualDesktopsModule {
-    fn update_display(&mut self) {
-        let _timer = self.metrics.start_widget_update_timer(Arc::clone(&self.metrics));
-
-        let manager = Arc::clone(&self.manager);
-        let handle = self.runtime_handle.clone();
-        let virtual_desktops = handle.block_on(async {
-            manager.lock().await.get_virtual_desktops()
-        });
-
-        let visible_vdesks: Vec<_> = virtual_desktops.into_iter()
-            .filter(|vdesk| vdesk.populated || vdesk.focused)
-            .collect();
-
-        if let Err(e) = self.widget_manager.update_widgets(&visible_vdesks) {
-            log::error!("Failed to update widgets: {}", e);
-            self.metrics.record_ipc_error();
-        }
-        self.widget_manager.refresh_display();
-    }
+    // update_display method removed - updates now come through async channels
 
     /// Get current performance metrics snapshot
     pub fn get_metrics(&self) -> crate::metrics::MetricsSnapshot {
@@ -287,21 +306,34 @@ impl VirtualDesktopsModule {
     }
 
     fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        self.runtime_handle.block_on(async {
-            let ipc = HyprlandIPC::new().await
-                .map_err(|e| anyhow::anyhow!("Failed to create Hyprland IPC: {}", e))?;
-
-            ipc.switch_to_virtual_desktop(vdesk_id).await
-                .map_err(|e| anyhow::anyhow!("Failed to switch virtual desktop: {}", e))
-        })
+        // Spawn a new thread to handle the async task
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            
+            rt.block_on(async move {
+                match HyprlandIPC::new().await {
+                    Ok(ipc) => {
+                        if let Err(e) = ipc.switch_to_virtual_desktop(vdesk_id).await {
+                            log::error!("Failed to switch to virtual desktop {}: {}", vdesk_id, e);
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create Hyprland IPC for action: {}", e);
+                    }
+                }
+            });
+        });
+        Ok(())
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use crate::{config::ModuleConfig, ConfigWrapper};
     use std::collections::HashSet;
-    use crate::{ConfigWrapper, config::ModuleConfig};
 
     #[test]
     fn test_widget_update_algorithm_complexity() {
@@ -353,7 +385,9 @@ mod tests {
 
         for _ in 0..100 {
             let jitter = fastrand::u64(0..=jitter_range * 2);
-            let delay_ms = base_delay.saturating_sub(jitter_range).saturating_add(jitter);
+            let delay_ms = base_delay
+                .saturating_sub(jitter_range)
+                .saturating_add(jitter);
             assert!(delay_ms >= 750);
             assert!(delay_ms <= 1250);
         }
