@@ -18,7 +18,9 @@ static INSTANCE_SIGNATURE_PATTERN: Lazy<Regex> = Lazy::new(|| {
 /// Validates Hyprland instance signature
 fn validate_instance_signature(signature: &str) -> Result<()> {
     if signature.is_empty() {
-        return Err(anyhow!("Invalid HYPRLAND_INSTANCE_SIGNATURE: empty signature"));
+        return Err(anyhow!(
+            "Invalid HYPRLAND_INSTANCE_SIGNATURE: empty signature"
+        ));
     }
 
     if !INSTANCE_SIGNATURE_PATTERN.is_match(signature) {
@@ -54,27 +56,33 @@ impl HyprlandIPC {
         // Validate instance signature
         validate_instance_signature(&instance_signature)?;
 
-        let runtime_dir = env::var("XDG_RUNTIME_DIR")
-            .map_err(|_| anyhow!("XDG_RUNTIME_DIR not set"))?;
-        
+        let runtime_dir =
+            env::var("XDG_RUNTIME_DIR").map_err(|_| anyhow!("XDG_RUNTIME_DIR not set"))?;
+
         let socket_path = PathBuf::from(runtime_dir.clone())
             .join("hypr")
             .join(&instance_signature)
             .join(".socket.sock");
-        
+
         let event_socket_path = PathBuf::from(runtime_dir)
             .join("hypr")
             .join(&instance_signature)
             .join(".socket2.sock");
-        
+
         if !socket_path.exists() {
-            return Err(anyhow!("Hyprland command socket not found: {:?}", socket_path));
+            return Err(anyhow!(
+                "Hyprland command socket not found: {:?}",
+                socket_path
+            ));
         }
-        
+
         if !event_socket_path.exists() {
-            return Err(anyhow!("Hyprland event socket not found: {:?}", event_socket_path));
+            return Err(anyhow!(
+                "Hyprland event socket not found: {:?}",
+                event_socket_path
+            ));
         }
-        
+
         Ok(Self {
             socket_path,
             event_socket_path,
@@ -82,7 +90,7 @@ impl HyprlandIPC {
             retry_base_delay_ms,
         })
     }
-    
+
     pub async fn listen_for_events(&mut self) -> Result<String> {
         let mut retry_count = 0;
         let max_retries = self.retry_max;
@@ -98,23 +106,36 @@ impl HyprlandIPC {
                     retry_count += 1;
 
                     if retry_count > max_retries {
-                        log::error!("Max retries ({}) exceeded for event listening. Giving up.", max_retries);
-                        return Err(anyhow::anyhow!("Event listening failed after {} retries: {}", max_retries, e));
+                        log::error!(
+                            "Max retries ({}) exceeded for event listening. Giving up.",
+                            max_retries
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Event listening failed after {} retries: {}",
+                            max_retries,
+                            e
+                        ));
                     }
 
                     // Exponential backoff with jitter
-                    let base_delay = std::cmp::min(
-                        base_delay_ms * 2_u64.pow(retry_count - 1),
-                        MAX_DELAY_MS
-                    );
+                    let base_delay =
+                        std::cmp::min(base_delay_ms * 2_u64.pow(retry_count - 1), MAX_DELAY_MS);
 
                     // Add ±25% jitter
                     let jitter_range = base_delay / 4; // 25% of base delay
                     let jitter = fastrand::u64(0..=jitter_range * 2); // 0 to 50% of base
-                    let delay_ms = base_delay.saturating_sub(jitter_range).saturating_add(jitter);
+                    let delay_ms = base_delay
+                        .saturating_sub(jitter_range)
+                        .saturating_add(jitter);
 
-                    log::warn!("Event listening failed (attempt {}/{}), retrying in {}ms (base: {}ms): {}",
-                              retry_count, max_retries, delay_ms, base_delay, e);
+                    log::warn!(
+                        "Event listening failed (attempt {}/{}), retrying in {}ms (base: {}ms): {}",
+                        retry_count,
+                        max_retries,
+                        delay_ms,
+                        base_delay,
+                        e
+                    );
 
                     tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                 }
@@ -136,25 +157,28 @@ impl HyprlandIPC {
 
         Err(anyhow!("Event stream ended"))
     }
-    
+
     pub async fn get_virtual_desktop_state(&self) -> Result<String> {
         self.send_command("j/printstate").await
     }
-    
+
     pub async fn get_virtual_desktop_info(&self, vdesk_id: u32) -> Result<String> {
         let command = format!("printdesk {}", vdesk_id);
         self.send_command(&command).await
     }
-    
+
     pub async fn switch_to_virtual_desktop(&self, vdesk_id: u32) -> Result<()> {
-        let command = format!("dispatch vdesk {}", vdesk_id);
+        let command = format!(
+            "dispatch function()hl.plugin.virtual_desktops.vdesk({})end",
+            vdesk_id
+        );
         self.send_command(&command).await?;
         Ok(())
     }
-    
+
     /// Send a raw command to Hyprland via the command socket
     pub async fn send_command(&self, command: &str) -> Result<String> {
-        use tokio::io::{AsyncWriteExt, AsyncReadExt};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let mut stream = UnixStream::connect(&self.socket_path).await?;
 
@@ -209,7 +233,10 @@ mod tests {
 
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", "test$malicious");
         let result = HyprlandIPC::new().await;
-        assert!(result.is_err(), "Should reject signature with special characters");
+        assert!(
+            result.is_err(),
+            "Should reject signature with special characters"
+        );
 
         std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", &"a".repeat(65));
         let result = HyprlandIPC::new().await;
@@ -219,7 +246,10 @@ mod tests {
             std::env::set_var("HYPRLAND_INSTANCE_SIGNATURE", valid_sig);
             let result = HyprlandIPC::new().await;
             if let Err(e) = result {
-                assert!(e.to_string().contains("socket not found") || e.to_string().contains("No such file"));
+                assert!(
+                    e.to_string().contains("socket not found")
+                        || e.to_string().contains("No such file")
+                );
             }
         }
     }
